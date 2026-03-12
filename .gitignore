@@ -1,0 +1,13 @@
+*.obj
+*.ilk
+*.log
+*.tlog
+*.pdb
+*.idb
+*.bak
+*.exe
+.vs
+*.vcxproj.user
+externals/abseil-cpp/build
+externals/boringssl/src/build
+x64/Debug/intermediate
