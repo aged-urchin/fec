@@ -133,6 +133,7 @@
     <ClInclude Include="bandfec_decoder.h" />
     <ClInclude Include="bandfec_encoder.h" />
     <ClInclude Include="network_conditioner.h" />
+    <ClInclude Include="reorder.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,6 +1,5 @@
 #include "bandfec_decoder.h"
 #include "bandfec.h"
-#include <cassert>
 
 void
 on_fec_receive(FecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2) {
@@ -87,6 +86,26 @@ BandFecDecoder::decode(uint32_t sequence, const uint8_t* data, int len) {
         m_decoders[sequence] = decoder;
     }
 
+    /** decoders that have no input data are dying
+     */
+    std::vector<uint32_t> outdated_decoders;
+    for (auto& dec : m_decoders) {
+        if (decoder != dec.second) {
+            ++dec.second->no_packets_cnt;
+            if (dec.second->no_packets_cnt >= dec.second->kDeathCounterOnNoData) {
+                printf("decoder(%u) is dead\n", dec.first);
+                outdated_decoders.push_back(dec.first);
+            }
+        } else {
+            decoder->no_packets_cnt = 0;
+        }
+    }
+    /** purge dead decoders
+     */
+    for (auto& dec : outdated_decoders) {
+        delete_decoder(dec);
+    }
+
     auto blocks = decoder->reorder.add_block(index, data, len);
     for (auto& block : blocks) {
         fec_decode(decoder->decoder, block.second.data(), block.second.size());
@@ -107,7 +126,6 @@ BandFecDecoder::delete_decoder(uint32_t sequence) {
     }
 
     delete decoder;
-
     m_decoders.erase(sequence);
 }
 

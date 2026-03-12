@@ -38,6 +38,10 @@ public:
         m_encoder->encode(data.data(), data.size());
     }
 
+    void update(int N, int K) {
+        m_encoder->set_param(kFecParamS, N, K);
+    }
+
 private:
     void on_encoder_output(BandFecEncoder* encoder, uint32_t sequence, const uint8_t* data, int len) override {
         auto block_idx = get_block_index(data, len);
@@ -101,7 +105,15 @@ int main() {
 
         foo.push_data(data);
         in_size += kReadSize;
+#if 0
+        if (in_size / kReadSize % 1000 == 0) {
+            static int rnd[] = { 5, 10, 15, 20 };
+            static int idx = 0;
 
+            auto p = rnd[++idx % (sizeof(rnd) / sizeof(rnd[0]))];
+            foo.update(p, p);
+        }
+#endif
         auto new_progress = (int)(in_size * 100.f / file_size);
         if (new_progress >= progress + 1) {
             SetConsoleTitleA((std::to_string(new_progress) + "%").c_str());
