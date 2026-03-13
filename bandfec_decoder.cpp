@@ -84,17 +84,18 @@ BandFecDecoder::decode(uint32_t sequence, const uint8_t* data, int len) {
         decoder->decoder = create_fec_decoder(&on_fec_receive, (int64_t)this, sequence);
 
         m_decoders[sequence] = decoder;
+        m_observer->on_decoder_sequence_begin(this, sequence);
     }
 
     /** decoders that have no input data are dying
      */
     std::vector<uint32_t> outdated_decoders;
-    for (auto& dec : m_decoders) {
-        if (decoder != dec.second) {
-            ++dec.second->no_packets_cnt;
-            if (dec.second->no_packets_cnt >= dec.second->kDeathCounterOnNoData) {
-                printf("decoder(%u) is dead\n", dec.first);
-                outdated_decoders.push_back(dec.first);
+    for (auto& block_decoder : m_decoders) {
+        if (decoder != block_decoder.second) {
+            ++block_decoder.second->no_packets_cnt;
+            if (block_decoder.second->no_packets_cnt >= block_decoder.second->kDeathCounterOnNoData) {
+                printf("decoder(%u) is dead\n", block_decoder.first);
+                outdated_decoders.push_back(block_decoder.first);
             }
         } else {
             decoder->no_packets_cnt = 0;
@@ -126,6 +127,8 @@ BandFecDecoder::delete_decoder(uint32_t sequence) {
     }
 
     delete decoder;
+    m_observer->on_decoder_sequence_end(this, sequence);
+
     m_decoders.erase(sequence);
 }
 

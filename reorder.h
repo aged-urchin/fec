@@ -51,7 +51,7 @@ public:
 private:
 
     const uint32_t      m_max_disorder{ 0 };
-    uint32_t            m_expecting_index{ 1 };
+    uint32_t            m_expecting_index{ 0 };
     BLOCKS              m_pending_blocks;
 };
 

@@ -36,9 +36,9 @@ private:
 
     struct GroupEncoder {
         const struct Config {
-            int   block_size;
-            int   blocks;
-            int   red_blocks;
+            int   block_size{ 1024 };
+            int   blocks{ 10 };
+            int   red_blocks{ 10 };
         } config;
 
         FecEncoder*             encoder{ nullptr };

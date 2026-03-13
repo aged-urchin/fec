@@ -11,6 +11,10 @@ class IBandFecDecoderObserver {
 public:
     virtual ~IBandFecDecoderObserver() = default;
 
+    virtual void on_decoder_sequence_begin(BandFecDecoder* decoder, uint32_t sequence) { }
+
+    virtual void on_decoder_sequence_end(BandFecDecoder* decoder, uint32_t sequence) { }
+
     virtual void on_decoder_output(BandFecDecoder* decoder, uint32_t sequence, int32_t pos, const uint8_t* data, int len) = 0;
 };
 
