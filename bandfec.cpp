@@ -18,8 +18,10 @@ static unsigned int poly[] = {
  *    i2redundant = off2nd < 0 ? i / (kdw + 1) + i % (kdw + 1) * f->e->w * 2 : f->e->k % (f->e->w * 2) + off2nd / kdw + off2nd % kdw * f->e->w * 2
  *
  */
-#define i2redundant(i,k,v) \
-    ((i) + (k) % (v) >= (k) ? (i) % (v) + (k) / (v) * (v) : (i) % (v) * ((k) / (v)) + (i) / (v))
+static int
+i2redundant(int i, int k, int v) {
+    return i + k % v >= k ? i % v + k / v * v : i % v * (k / v) + i / v;
+}
 
 static void
 MAC(int multiplier, int32_t* source, int32_t* dest, int g, int s) {
@@ -57,6 +59,23 @@ create_fec_encoder(uint16_t     s,
         return nullptr;
     }
 
+    /** memory layout
+     *
+     *  .----------------------.
+     *  |      FecEncoder      |
+     *  |----------------------|
+     *  |     redundant 0      |
+     *  |----------------------|
+     *  |        ... ...       |
+     *  |----------------------|
+     *  |    redundant k - 1   |
+     *  |----------------------|
+     *  |      HeaderType      |
+     *  |----------------------|
+     *  |          s           |
+     *  .----------------------.
+     *
+     */
     auto f = (FecEncoder*)malloc(sizeof (FecEncoder) + sizeof (HeaderType) + s * (k + 1));
     if (!f) {
         /** out of memory
@@ -85,6 +104,7 @@ create_fec_encoder(uint16_t     s,
     h->g = g;
     h->i = 0;
 
+    memset(f + 1, 0, s * k); ///< initialize the redundant packets
     return f;
 }
 
@@ -93,12 +113,12 @@ add_to_redundant(int32_t* buf, FecEncDec* e, int i) {
     /** this is called by both the encoder and the decoder when they process the payload. But this code is also repeated where the decoder sets up the matrix. 
      *  i suppose a lot of pseudo random stuff can be tried, but in the end nature will add its own randomness by way of the packets it destroys.
      */
-    int row, mid = i * e->w % e->k; // e.g. mid = i * 87654321 % e->k
+    int row, mid = i * e->w % e->k; ///< e.g. mid = i * 87654321 % e->k
     uint32_t coef = i + 1;
 
     for (row = (std::max)(0, (std::min)(mid, e->k - e->w) - e->w); row < (std::min)(e->k, (std::max)(mid, e->w) + e->w); ++row) {
         coef *= 1763689789;
-        MAC(coef >> (32 - e->g), buf, (int32_t*)(row * e->s + (char *)(e + 1)), e->g, e->s);
+        MAC(coef >> (32 - e->g), buf, (int32_t*)(row * e->s + (char*)(e + 1)), e->g, e->s);
     }
 
     /** what actually needs to be investigated is the problems at the edges:
@@ -117,8 +137,8 @@ send_data(int32_t* buf, FecEncoder* f) {
 
     memcpy(h + 1, buf, f->e.s);
 
-    ++f->e.i;
     h->i = UINT32_TO_BE(f->e.i);
+    ++f->e.i;
 
     f->cb_send(f, h, s, f->user_data1, f->user_data2);
 }
@@ -128,10 +148,10 @@ fec_encode(FecEncoder* f, int32_t* buf) {
     add_to_redundant(buf, &f->e, f->e.i);
 
     send_data(buf, f);
+
     if (f->e.i % (f->e.n + f->e.k) == f->e.n) {
         for (int i = 0; i < f->e.k; ++i) {
-            send_data((int32_t*)(i2redundant (i, f->e.k, f->e.w) * f->e.s + (char*)(f + 1)), f);
-            ///< todo: ensure that the lower CPU load at this point does not create timing problems
+            send_data((int32_t*)(i2redundant(i, f->e.k, f->e.w) * f->e.s + (char*)(f + 1)), f);
         }
     }
 }
