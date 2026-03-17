@@ -1,5 +1,8 @@
 #include "bandfec_decoder.h"
 #include "bandfec.h"
+#include "fec_packet.h"
+
+#include <iostream>
 
 void
 on_fec_receive(FecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2) {
@@ -13,20 +16,51 @@ on_fec_receive(FecDecoder* f, int64_t position, void* buf, int len, int64_t user
     decoder->on_new_block(sequence, (int32_t)position / len, (const uint8_t*)buf, len);
 }
 
-BandFecDecoder::BlockDecoder::BlockDecoder(const Config& _config) :
-config(_config) {
-
-}
-
-BandFecDecoder::BlockDecoder::~BlockDecoder() {
-    flush_fec_decoder(decoder);
-    destroy_fec_decoder(decoder);
+BandFecDecoder::ReconstructedFrame::ReconstructedFrame(int size) {
+    if (size > 0) {
+        data.resize(size);
+    }
 }
 
 bool
-BandFecDecoder::BlockDecoder::is_same(const Config& _config) const {
-    return config.block_size == _config.block_size && config.blocks == _config.blocks &&
-           config.red_blocks == _config.red_blocks && config.param_g == _config.param_g && config.param_w == _config.param_w;
+BandFecDecoder::ReconstructedFrame::ready() {
+    int total_written = 0;
+    for (const auto& slot : slots) {
+        total_written += slot.second;
+    }
+
+    return !data.empty() && total_written == data.size();
+}
+
+bool
+BandFecDecoder::ReconstructedFrame::push_fragment(int offset, const uint8_t* fragment_data, int size) {
+    if (data.empty()) {
+        std::cerr << "invalid operation" << std::endl;
+        return false;
+    }
+
+    if (offset < 0 || size <= 0 || !fragment_data || offset + size > data.size()) {
+        std::cerr << "invalid arguments" << std::endl;
+        return false;
+    }
+
+    /** determine if slot is available
+     */
+    int fragment_end = offset + size;
+    for (const auto& slot : slots) {
+        int slot_start = slot.first;
+        int slot_end = slot_start + slot.second;
+
+        if (offset < slot_end && fragment_end > slot_start) {
+            std::cerr << "slot conflict" << std::endl;
+            return false;
+        }
+    }
+
+    std::copy(fragment_data, fragment_data + size, data.begin() + offset);
+    slots[offset] = size;
+
+    return true;
 }
 
 BandFecDecoder::BandFecDecoder(IBandFecDecoderObserver* observer) :
@@ -35,104 +69,112 @@ m_observer(observer) {
 }
 
 BandFecDecoder::~BandFecDecoder() {
-    while (!m_decoders.empty()) {
-        delete_decoder(m_decoders.begin()->first);
+    while (!m_pending_frames.empty()) {
+        auto itr = m_pending_frames.begin();
+        delete itr->second;
+
+        m_pending_frames.erase(itr);
+    }
+
+    while (!m_seq_decoders.empty()) {
+        auto itr = m_seq_decoders.begin();
+        remove_decoder(itr->first);
     }
 }
 
 void
-BandFecDecoder::max_reorder_delay(int delay_in_packets) {
-
-}
-
-void
-BandFecDecoder::decode(uint32_t sequence, const uint8_t* data, int len) {
-    BlockDecoder::Config config;
-    BlockDecoder* decoder = nullptr;
-
-    HeaderType header;
-    if (len <= sizeof(HeaderType)) {
-        printf("error\n");
+BandFecDecoder::decode(const uint8_t* data, int len) {
+    auto packet = FecPacket::parse_from_buffer(data, len);
+    if (!packet) {
         return;
     }
 
-    fec_parse_block((uint8_t*)data, len, header);
+    FecHeader header;
+    packet->get_header(header);
 
-    config.block_size = header.s;
-    config.blocks     = header.n;
-    config.red_blocks = header.k;
-    config.param_w    = header.w;
-    config.param_g    = header.g;
-
-    int index = header.i;
-
-    if (m_decoders.count(sequence) > 0 && !(decoder = m_decoders[sequence])->is_same(config)) {
-        /** should not happen
-         */
-        printf("error\n");
-
-        delete_decoder(sequence);
-        return;
-    }
-
-    if (!decoder) {
-        if (kMaxDecoders == m_decoders.size()) {
-            delete_decoder(m_decoders.begin()->first);
-        }
-
-        decoder = new BlockDecoder(config);
-        decoder->decoder = create_fec_decoder(&on_fec_receive, (int64_t)this, sequence);
-
-        m_decoders[sequence] = decoder;
-        m_observer->on_decoder_sequence_begin(this, sequence);
-    }
-
-    /** decoders that have no input data are dying
-     */
-    std::vector<uint32_t> outdated_decoders;
-    for (auto& block_decoder : m_decoders) {
-        if (decoder != block_decoder.second) {
-            ++block_decoder.second->no_packets_cnt;
-            if (block_decoder.second->no_packets_cnt >= block_decoder.second->kDeathCounterOnNoData) {
-                printf("decoder(%u) is dead\n", block_decoder.first);
-                outdated_decoders.push_back(block_decoder.first);
-            }
-        } else {
-            decoder->no_packets_cnt = 0;
+    std::vector<uint16_t> outdated_decoders;
+    for (auto& decoder : m_seq_decoders) {
+        if (decoder.first == header.sequence_number) {
+            decoder.second->no_packets_cnt = 0;
+        } else if (++decoder.second->no_packets_cnt >= kDeathCounterOnNoData) {
+            outdated_decoders.push_back(decoder.first);
         }
     }
-    /** purge dead decoders
-     */
-    for (auto& dec : outdated_decoders) {
-        delete_decoder(dec);
+
+    for (auto& decoder : outdated_decoders) {
+        remove_decoder(decoder);
     }
 
-    auto blocks = decoder->reorder.add_block(index, data, len);
-    for (auto& block : blocks) {
-        fec_decode(decoder->decoder, block.second.data(), block.second.size());
+    if (0 == m_seq_decoders.count(header.sequence_number)) {
+        auto decoder = new Decoder;
+        decoder->decoder = create_fec_decoder(&on_fec_receive, (int64_t)this, 0);
+
+        m_seq_decoders[header.sequence_number] = decoder;
     }
+
+    auto decoder = m_seq_decoders[header.sequence_number];
+    fec_decode(decoder->decoder, (void*)packet->get_payload(), packet->get_payload_size());
 }
 
 void
-BandFecDecoder::delete_decoder(uint32_t sequence) {
-    if (0 == m_decoders.count(sequence)) {
+BandFecDecoder::remove_decoder(uint16_t sequence) {
+    if (0 == m_seq_decoders.count(sequence)) {
         return;
     }
 
-    auto decoder = m_decoders[sequence];
+    auto decoder = m_seq_decoders[sequence];
 
-    auto blocks = decoder->reorder.flush();
-    for (auto& block : blocks) {
-        fec_decode(decoder->decoder, block.second.data(), block.second.size());
-    }
+    flush_fec_decoder(decoder->decoder);
+    destroy_fec_decoder(decoder->decoder);
 
     delete decoder;
-    m_observer->on_decoder_sequence_end(this, sequence);
-
-    m_decoders.erase(sequence);
+    m_seq_decoders.erase(sequence);
 }
 
 void
-BandFecDecoder::on_new_block(uint32_t sequence, int32_t pos, const uint8_t* data, int len) {
-    m_observer->on_decoder_output(this, sequence, pos, data, len);
+BandFecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data, int len) {
+    uint8_t* remaining_data = (uint8_t*)data;
+    int      remaining_len  = len;
+
+    while (remaining_len > sizeof(FecFragmentHeader)) {
+        auto frag_header = (FecFragmentHeader*)remaining_data;
+        auto header      = frag_header->to_host();
+
+        if (header.is_empty()) {
+            std::cerr << "empty fragment, skip this block" << std::endl;
+            return;
+        }
+
+        remaining_data += sizeof(FecFragmentHeader);
+        remaining_len  -= sizeof(FecFragmentHeader);
+
+        if (remaining_len < header.frag_size) {
+            std::cerr << "invalid fragment" << std::endl;
+            return;
+        }
+
+        if (0 == m_pending_frames.count(header.frame_number)) {
+            m_pending_frames[header.frame_number] = new ReconstructedFrame(header.frame_size);
+        }
+
+        auto frame = m_pending_frames[header.frame_number];
+        auto ret   = frame->push_fragment(header.frag_offset, remaining_data, header.frag_size);
+        if (!ret) {
+            return;
+        }
+
+        remaining_data += header.frag_size;
+        remaining_len  -= header.frag_size;
+
+        if (frame->ready()) {
+            m_observer->on_decoder_output(this, sequence, header.frame_number, frame->data.data(), frame->data.size());
+
+            m_pending_frames.erase(header.frame_number);
+            delete frame;
+        }
+    }
+
+    if (remaining_len != 0) {
+        std::cerr << "invalid argument" << std::endl;
+    }
 }

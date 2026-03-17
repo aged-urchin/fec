@@ -51,7 +51,7 @@ create_fec_encoder(uint16_t     s,
                    int64_t      user_data2);
 
 void
-fec_encode(FecEncoder* f, int32_t* buf);
+fec_encode(FecEncoder* f, int32_t* buf, bool& done);
 
 void
 destroy_fec_encoder(FecEncoder* f);

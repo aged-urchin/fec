@@ -1,39 +1,16 @@
 #include "bandfec_encoder.h"
 #include "bandfec.h"
+#include "fec_packet.h"
 
 #include <iostream>
-
-uint32_t
-get_block_index(const uint8_t* buf, size_t size) {
-    HeaderType header;
-    fec_parse_block((void*)buf, size, header);
-
-    return header.i;
-}
+#include <cassert>
 
 void
 on_fec_send(FecEncoder* f, void* buf, size_t size, int64_t user_data1, int64_t user_data2) {
     auto encoder  = (BandFecEncoder*)user_data1;
-    auto sequence = (uint32_t)user_data2;
+    auto sequence = (uint16_t)user_data2;
 
-    if (user_data2 > UINT32_MAX) {
-        std::cerr << "user_data2 is too large as an uint32" << std::endl;
-    }
     encoder->on_new_block(sequence, (uint8_t*)buf, size);
-}
-
-BandFecEncoder::GroupEncoder::GroupEncoder(const Config& _config) :
-config(_config) {
-
-}
-
-BandFecEncoder::GroupEncoder::~GroupEncoder() {
-    destroy_fec_encoder(encoder);
-}
-
-bool
-BandFecEncoder::GroupEncoder::is_same(const Config& _config) const {
-    return _config.block_size == config.block_size && _config.blocks == config.blocks && _config.red_blocks == config.red_blocks;
 }
 
 BandFecEncoder::BandFecEncoder(IBandFecEncoderObserver* observer) :
@@ -44,84 +21,153 @@ m_observer(observer) {
 BandFecEncoder::~BandFecEncoder() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    delete m_main_encoder;
-    m_main_encoder = nullptr;
-
-    delete m_secondary_encoder;
-    m_secondary_encoder = nullptr;
+    destroy_encoder();
 }
 
-void
+bool
 BandFecEncoder::set_param(int block_size_in_bytes, int data_blocks_in_group, int redundant_blocks_in_group) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    GroupEncoder::Config config;
-
-    config.block_size = block_size_in_bytes;
-    config.blocks     = data_blocks_in_group;
-    config.red_blocks = redundant_blocks_in_group;
-
-    auto create_encoder = [config, this]() {
-        static const int kFecParamW = 40;
-        static const int kFecParamG = 4;
-
-        auto encoder = new GroupEncoder(config);
-        encoder->encoder = create_fec_encoder(config.block_size,
-                                              config.blocks,
-                                              config.red_blocks,
-                                              kFecParamW,
-                                              kFecParamG,
-                                              &on_fec_send,
-                                              (int64_t)this,
-                                              m_sequence++);
-
-        return encoder;
-    };
-
-    if ((m_secondary_encoder && m_secondary_encoder->is_same(config)) ||
-        (m_main_encoder && m_main_encoder->is_same(config))) {
-        return;
+    auto aligned_size = (block_size_in_bytes / (4 * kFecParamG)) * (4 * kFecParamG);
+    if (aligned_size <= sizeof(FecFragmentHeader) || data_blocks_in_group <= 0 || redundant_blocks_in_group <= 0) {
+        std::cerr << "invalid arguments" << std::endl;
+        return false;
     }
 
-    auto encoder = create_encoder();
-    if (!m_main_encoder) {
-        m_main_encoder = encoder;
-    } else {
-        delete m_secondary_encoder;
-        m_secondary_encoder = encoder;
-    }
+    m_config.block_size = aligned_size;
+    m_config.blocks     = data_blocks_in_group;
+    m_config.red_blocks = redundant_blocks_in_group;
+
+    return true;
 }
 
 void
 BandFecEncoder::encode(const uint8_t* data, int data_len) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    if (!m_main_encoder) {
+    FecFragmentHeader header;
+    char* src      = (char*)data;
+    int   src_size = data_len;
+
+    if (!data || data_len <= 0) {
+        std::cerr << "invalid arguments" << std::endl;
         return;
     }
 
-    m_main_encoder->block.insert(m_main_encoder->block.end(), data, data + data_len);
-    
-    while (m_main_encoder->block.size() >= m_main_encoder->config.block_size) {
-        fec_encode(m_main_encoder->encoder, (int32_t*)&m_main_encoder->block);
+    if (!m_observer || 0 == m_config.block_size) {
+        std::cerr << "observer or param not set" << std::endl;
+        return;
+    }
 
-        m_main_encoder->block.erase(m_main_encoder->block.begin(), m_main_encoder->block.begin() + m_main_encoder->config.block_size);
+    header.frame_number = m_frame_num++; ///< 0, 1, 2, ...
+    header.frame_size   = data_len;
+    header.frag_offset  = 0;
+    header.frag_size    = 0;
 
-        if (++m_main_encoder->block_idx == m_main_encoder->config.blocks) {
-            if (m_secondary_encoder) {
-                m_secondary_encoder->block = std::move(m_main_encoder->block);
-                delete m_main_encoder;
+    while (src_size > 0) {
+        if (!m_encoder && !(m_encoder = create_encoder())) {
+            std::cerr << "could not create encoder" << std::endl;
+            return;
+        }
 
-                m_main_encoder = m_secondary_encoder;
-                m_secondary_encoder = nullptr;
-            } else {
-                m_main_encoder->block_idx = 0;
-            }
+        auto available_size = m_active_config.block_size - (int)m_block.size();
+        assert(available_size > 0);
+
+        auto data_size = available_size - (int)sizeof(FecFragmentHeader);
+        if (data_size > 0) {
+            auto copy_size = (std::min)(src_size, data_size);
+
+            header.frag_offset += header.frag_size;
+            header.frag_size    = copy_size;
+
+            auto be_header = header.to_network();
+            /**  .__________________________________________.
+             *   |                           |              |
+             *   |     FecFragmentHeader     |     data     |
+             *   |                           |              |
+             *   `------------------------------------------`
+             *
+             *   |<---------- Config.block_size ----------->|
+             *
+             */
+            m_block.insert(m_block.end(), (char*)&be_header, (char*)&be_header + sizeof(FecFragmentHeader));
+            m_block.insert(m_block.end(), src, src + copy_size);
+
+            src      += copy_size;
+            src_size -= copy_size;
+        }
+
+        if (m_active_config.block_size - m_block.size() > sizeof(FecFragmentHeader)) {
+            /** there is still enough space for another writing(at least one extra data byte(excluding the header))
+             */
+            assert(0 == src_size);
+            break;
+        }
+
+        /** block is full, or remaining space is not enough for another writing: encode this block
+         */
+        bool done = false;
+        fec_encode(m_encoder, (int32_t*)m_block.data(), done);
+        m_block.clear();
+
+        if (done) {
+            destroy_fec_encoder(m_encoder);
+            m_encoder = nullptr;
         }
     }
 }
 
 void
-BandFecEncoder::on_new_block(uint32_t sequence, const uint8_t* data, int len) {
-    m_observer->on_encoder_output(this, sequence, data, len);
+BandFecEncoder::flush() {
+    if (!m_encoder) {
+        return;
+    }
+
+    bool done = false;
+    do {
+        FecFragmentHeader empty_header;
+        m_block.insert(m_block.end(), (char*)&empty_header, (char*)&empty_header + sizeof(FecFragmentHeader));
+
+        fec_encode(m_encoder, (int32_t*)m_block.data(), done);
+        m_block.clear();
+    } while (!done);
+    
+    destroy_fec_encoder(m_encoder);
+    m_encoder = nullptr;
+}
+
+FecEncoder*
+BandFecEncoder::create_encoder() {
+    auto encoder =
+        create_fec_encoder(m_config.block_size,
+                           m_config.blocks,
+                           m_config.red_blocks,
+                           kFecParamW,
+                           kFecParamG,
+                           &on_fec_send,
+                           (int64_t)this,
+                           m_group_num++); ///< 0, 1, 2, ...
+    if (encoder) {
+        m_active_config = m_config;
+    }
+    return encoder;
+}
+
+void
+BandFecEncoder::destroy_encoder() {
+    if (m_encoder) {
+        destroy_fec_encoder(m_encoder);
+        m_encoder = nullptr;
+    }
+}
+
+void
+BandFecEncoder::on_new_block(uint16_t sequence, const uint8_t* data, int len) {
+    auto packet = FecPacket::create_instance(data, len, sequence);
+    if (!packet) {
+        std::cerr << "could not create fec packet" << std::endl;
+        return;
+    }
+
+    m_observer->on_encoder_output(this, packet);
 }

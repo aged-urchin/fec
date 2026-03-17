@@ -1,14 +1,11 @@
 #include "bandfec.h"
+#include "utils.h"
+
 #include <algorithm>
 
 static unsigned int poly[] = {
     0x1, 0x2, 0x7, 0xb, 0x13, 0x25, 0x43, 0x83, 0x11b, 0x203, 0x409, 0x805, 0x1009, 0x201b, 0x4021, 0x8003, 0x1002b
 };
-
-#define UINT16_TO_BE(val)       (uint16_t)((((val) >> 8) & 0xFF) | (((val) & 0x00FF) << 8))
-#define UINT32_TO_BE(val)       (uint32_t)((((val) >> 24) & 0xFF) | (((val) >>  8) & 0x0000FF00) | (((val) <<  8) & 0x00FF0000) | (((val) << 24) & 0xFF000000))
-#define UINT16_FROM_BE(val)     UINT16_TO_BE(val)
-#define UINT32_FROM_BE(val)     UINT32_TO_BE(val)
 
 /** This function is used to send the redundant packets in a permutated order, distributing the effects of bust losses.
  *  The weakness of this implementation is that the last k % v packets are not permutated. We choose v = w.
@@ -144,15 +141,18 @@ send_data(int32_t* buf, FecEncoder* f) {
 }
 
 void
-fec_encode(FecEncoder* f, int32_t* buf) {
-    add_to_redundant(buf, &f->e, f->e.i);
+fec_encode(FecEncoder* f, int32_t* buf, bool& done) {
+    done = false;
 
+    add_to_redundant(buf, &f->e, f->e.i);
     send_data(buf, f);
 
     if (f->e.i % (f->e.n + f->e.k) == f->e.n) {
         for (int i = 0; i < f->e.k; ++i) {
             send_data((int32_t*)(i2redundant(i, f->e.k, f->e.w) * f->e.s + (char*)(f + 1)), f);
         }
+
+        done = true;
     }
 }
 
