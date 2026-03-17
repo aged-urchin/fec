@@ -8,24 +8,15 @@
 struct FecDecoder;
 class BandFecDecoder;
 
-class IBandFecDecoderObserver {
+class BandFecDecoder : public IFecDecoder {
 public:
-    virtual ~IBandFecDecoderObserver() = default;
+    BandFecDecoder(IFecDecoderObserver* observer);
 
-    virtual void on_decoder_output(BandFecDecoder*  decoder,
-                                   uint16_t         sequence_number,
-                                   uint16_t         frame_number,
-                                   const uint8_t*   data,
-                                   int              data_len) = 0;
-};
+    ~BandFecDecoder() override;
 
-class BandFecDecoder {
-public:
-    BandFecDecoder(IBandFecDecoderObserver* observer);
+    void set_reorder_window_size(int size) override;
 
-    ~BandFecDecoder();
-
-    void decode(const uint8_t* data, int len);
+    void decode(const uint8_t* data, int len) override;
 
 private:
     void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len);
@@ -34,8 +25,6 @@ private:
 
 private:
     friend void on_fec_receive(FecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2);
-
-    enum { kDeathCounterOnNoData = 3 };
 
     struct ReconstructedFrame {
         std::vector<uint8_t>    data;
@@ -51,7 +40,8 @@ private:
         FecDecoder*     decoder{ nullptr };
     };
 
-    IBandFecDecoderObserver*                m_observer;
+    int                                     m_reorder_window_size{ 3 };
+    IFecDecoderObserver*                    m_observer;
     std::map<uint16_t, ReconstructedFrame*> m_pending_frames; ///< FecFragmentHeader::frame_number
     std::map<uint16_t, Decoder*>            m_seq_decoders;   ///< FecHeader::sequence_number
 };

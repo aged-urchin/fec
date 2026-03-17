@@ -137,6 +137,7 @@
     <ClInclude Include="fec_codec.h" />
     <ClInclude Include="fec_packet.h" />
     <ClInclude Include="network_conditioner.h" />
+    <ClInclude Include="refcount.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

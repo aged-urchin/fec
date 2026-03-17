@@ -2,13 +2,23 @@
 #define ___FEC_PACKET_H___
 
 #include "fec_codec.h"
+#include "refcount.h"
 #include <vector>
 
-class FecPacket : public IFecPacket {
+class FecPacket : public IFecPacket,
+                  public RefCount {
 public:
     static FecPacket* create_instance(const uint8_t* data, int len, uint16_t sequence_number);
 
     static FecPacket* parse_from_buffer(const void* data, int len);
+
+    unsigned long retain() override {
+        return RefCount::retain();
+    }
+
+    unsigned long release() override {
+        return RefCount::release();
+    }
 
     bool get_header(FecHeader& header) const override;
 
@@ -22,6 +32,8 @@ public:
 
 private:
     FecPacket(const uint8_t* data, int len, uint16_t sequence_number);
+
+    ~FecPacket() override = default;
 
 private:
 

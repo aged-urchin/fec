@@ -63,7 +63,7 @@ BandFecDecoder::ReconstructedFrame::push_fragment(int offset, const uint8_t* fra
     return true;
 }
 
-BandFecDecoder::BandFecDecoder(IBandFecDecoderObserver* observer) :
+BandFecDecoder::BandFecDecoder(IFecDecoderObserver* observer) :
 m_observer(observer) {
 
 }
@@ -83,6 +83,12 @@ BandFecDecoder::~BandFecDecoder() {
 }
 
 void
+BandFecDecoder::set_reorder_window_size(int size) {
+    m_reorder_window_size = size;
+    std::cerr << "reorder window size changed to " << m_reorder_window_size << std::endl;
+}
+
+void
 BandFecDecoder::decode(const uint8_t* data, int len) {
     auto packet = FecPacket::parse_from_buffer(data, len);
     if (!packet) {
@@ -96,7 +102,7 @@ BandFecDecoder::decode(const uint8_t* data, int len) {
     for (auto& decoder : m_seq_decoders) {
         if (decoder.first == header.sequence_number) {
             decoder.second->no_packets_cnt = 0;
-        } else if (++decoder.second->no_packets_cnt >= kDeathCounterOnNoData) {
+        } else if (++decoder.second->no_packets_cnt > m_reorder_window_size) {
             outdated_decoders.push_back(decoder.first);
         }
     }
@@ -114,6 +120,8 @@ BandFecDecoder::decode(const uint8_t* data, int len) {
 
     auto decoder = m_seq_decoders[header.sequence_number];
     fec_decode(decoder->decoder, (void*)packet->get_payload(), packet->get_payload_size());
+
+    packet->release();
 }
 
 void

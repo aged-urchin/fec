@@ -1,8 +1,8 @@
 #include "network_conditioner.h"
-#include "bandfec_encoder.h"
-#include "bandfec_decoder.h"
+#include "fec_codec.h"
 
 #include <iostream>
+#include <map>
 #include <vector>
 #include <string>
 #include <fstream>
@@ -13,13 +13,13 @@ RandomLossTool traffic(LossRateType::LOSS_30_PERCENT);
 
 const int kFecParamS = 1024;
 const int kFecParamN = 10;
-const int kFecParamK = 10;
+const int kFecParamK = 12;
 
 FILE* random_in = nullptr, *recv_block = nullptr;
 std::vector<int32_t> random_numbers_in;
 
-class Foo : public IBandFecEncoderObserver,
-            public IBandFecDecoderObserver {
+class Foo : public IFecEncoderObserver,
+            public IFecDecoderObserver {
 public:
     void start(const char* name) {
         m_out_file = fopen(name, "wb");
@@ -35,8 +35,8 @@ public:
         }
 #endif
 
-        m_encoder = new BandFecEncoder(this);
-        m_decoder = new BandFecDecoder(this);
+        m_encoder = create_fec_encoder(this);
+        m_decoder = create_fec_decoder(this);
 
         m_encoder->set_param(kFecParamS, kFecParamN, kFecParamK);
     }
@@ -45,11 +45,11 @@ public:
         if (m_encoder) {
             m_encoder->flush();
 
-            delete m_encoder;
+            destroy_fec_encoder(m_encoder);
             m_encoder = nullptr;
         }
 
-        delete m_decoder;
+        destroy_fec_decoder(m_decoder);
         m_decoder = nullptr;
 
         int constructed_frames = 0;
@@ -73,7 +73,7 @@ public:
     }
 
 private:
-    void on_encoder_output(BandFecEncoder* encoder, IFecPacket* packet) override {
+    void on_encoder_output(IFecEncoder* encoder, IFecPacket* packet) override {
         static int out_packets = 0;
         ++out_packets;
 #if USE_RANDOM_FILE
@@ -85,7 +85,7 @@ private:
         }
     }
 
-    void on_decoder_output(BandFecDecoder* decoder, uint16_t sequence_number, uint16_t frame_number, const uint8_t* data, int len) override {
+    void on_decoder_output(IFecDecoder* decoder, uint16_t sequence_number, uint16_t frame_number, const uint8_t* data, int len) override {
         m_frames[sequence_number].frames[frame_number] = { data, data + len };
     }
 
@@ -96,8 +96,8 @@ private:
     };
 
     bool                                    m_new_line{ false };
-    BandFecEncoder*                         m_encoder{ nullptr };
-    BandFecDecoder*                         m_decoder{ nullptr };
+    IFecEncoder*                            m_encoder{ nullptr };
+    IFecDecoder*                            m_decoder{ nullptr };
     FILE*                                   m_out_file{ nullptr };
     uint16_t                                m_next_frame{ 0 };
     std::map<uint16_t, SequenceData>        m_frames;
@@ -127,7 +127,7 @@ int main() {
         foo.push_data(data);
         in_size += kReadSize;
 #if 0
-        if (in_size / kReadSize % 1000 == 0) {
+        if (in_size / kReadSize % 500 == 0) {
             static int rnd[] = { 5, 10, 15, 20 };
             static int idx = 0;
 

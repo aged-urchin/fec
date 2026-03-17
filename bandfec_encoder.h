@@ -1,31 +1,27 @@
 #ifndef ___BANDFEC_ENCODER_H___
 #define ___BANDFEC_ENCODER_H___
 
+#include "fec_codec.h"
+
 #include <mutex>
 #include <vector>
+#include <sstream>
 
 struct FecEncoder;
 class BandFecEncoder;
 class IFecPacket;
 
-class IBandFecEncoderObserver {
+class BandFecEncoder : public IFecEncoder {
 public:
-    virtual ~IBandFecEncoderObserver() = default;
+    BandFecEncoder(IFecEncoderObserver* observer);
 
-    virtual void on_encoder_output(BandFecEncoder* encoder, IFecPacket* packet) = 0;
-};
+    ~BandFecEncoder() override;
 
-class BandFecEncoder {
-public:
-    BandFecEncoder(IBandFecEncoderObserver* observer);
+    bool set_param(int block_size_in_bytes, int data_blocks_in_group, int redundant_blocks_in_group) override;
 
-    ~BandFecEncoder();
+    void encode(const uint8_t* data, int data_len) override;
 
-    bool set_param(int block_size_in_bytes, int data_blocks_in_group, int redundant_blocks_in_group);
-
-    void encode(const uint8_t* data, int data_len);
-
-    void flush();
+    void flush() override;
 
 private:
     void on_new_block(uint16_t sequence, const uint8_t* data, int len);
@@ -45,11 +41,22 @@ private:
         int   block_size{ 0 };
         int   blocks{ 0 };
         int   red_blocks{ 0 };
+
+        bool is_equal(const Config& config) {
+            return block_size == config.block_size && blocks == config.blocks && red_blocks == config.red_blocks;
+        }
+
+        std::string to_string() {
+            std::ostringstream os;
+            os << "[s: " << block_size << ", n: " << blocks << ", k: " << red_blocks << "]";
+
+            return os.str();
+        }
     };
 
     Config                      m_config;
     Config                      m_active_config;
-    IBandFecEncoderObserver*    m_observer{ nullptr };
+    IFecEncoderObserver*        m_observer{ nullptr };
     FecEncoder*                 m_encoder{ nullptr };
     uint16_t                    m_group_num{ 0 }; 
     uint16_t                    m_frame_num{ 0 };

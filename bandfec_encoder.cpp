@@ -13,7 +13,7 @@ on_fec_send(FecEncoder* f, void* buf, size_t size, int64_t user_data1, int64_t u
     encoder->on_new_block(sequence, (uint8_t*)buf, size);
 }
 
-BandFecEncoder::BandFecEncoder(IBandFecEncoderObserver* observer) :
+BandFecEncoder::BandFecEncoder(IFecEncoderObserver* observer) :
 m_observer(observer) {
 
 }
@@ -38,6 +38,7 @@ BandFecEncoder::set_param(int block_size_in_bytes, int data_blocks_in_group, int
     m_config.blocks     = data_blocks_in_group;
     m_config.red_blocks = redundant_blocks_in_group;
 
+    std::cerr << "new config set: " << m_config.to_string() << std::endl;
     return true;
 }
 
@@ -148,6 +149,10 @@ BandFecEncoder::create_encoder() {
                            (int64_t)this,
                            m_group_num++); ///< 0, 1, 2, ...
     if (encoder) {
+        if (!m_active_config.is_equal(m_config)) {
+            std::cerr << "active config changed to " << m_config.to_string() << std::endl;
+        }
+
         m_active_config = m_config;
     }
     return encoder;
@@ -170,4 +175,5 @@ BandFecEncoder::on_new_block(uint16_t sequence, const uint8_t* data, int len) {
     }
 
     m_observer->on_encoder_output(this, packet);
+    packet->release();
 }
