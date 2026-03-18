@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-typedef void (*fec_send) (struct FecEncoder* f, void* buf, size_t size, int64_t user_data1, int64_t user_data2);
+typedef void (*fec_send) (struct FecEncoder* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2);
 typedef void (*fec_recv) (struct FecDecoder* f, int64_t position, void* buf, int len, int64_t user_data, int64_t user_data2);
 
 struct HeaderType {

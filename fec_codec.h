@@ -38,15 +38,79 @@ struct FecFragmentHeader {
     }
 };
 
+/** rtp packet format                                                                  rtcp packet format
+ *  0                   1                   2                   3                      0                   1                   2                   3
+ *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1                    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |V=2|P|X| CC  |M|      PT     |         sequence number         |                  |V=2|P|    RC   |   PT          |             length            |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |                            timestamp                          |                  |                     SSRC of sender/participant                |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+ *  |            synchronization source (SSRC) identifier           |                  |                      payload (variable)                       |
+ *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+                  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |             contributing source (CSRC) identifiers            |
+ *  |                             ....                              |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *  stun packet format                                                                 dtls packet format
+ *  0                   1                   2                   3                      0                   1                   2                   3
+ *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1                    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |0 0|     Type (14)             |         Length (16)           |                  | Content Type  |    Version    |         Epoch (2bytes)        |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |                      Value (variable)                         |                  |                     Sequence Number (6bytes)                  |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |                     Padding (0-3bytes)                        |                  |             Length (2bytes)       |         Payload ...       |
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *  // TODO: Should support error response.
+ *  // For STUN packet, 0x00 is binding request, 0x01 is binding success response.
+ *  bool srs_is_stun(const uint8_t *data, size_t size)
+ *  {
+ *      return size > 0 && (data[0] == 0 || data[0] == 1);
+ *  }
+ *
+ *  // change_cipher_spec(20), alert(21), handshake(22), application_data(23)
+ *  // @see https://tools.ietf.org/html/rfc2246#section-6.2.1
+ *  bool srs_is_dtls(const uint8_t *data, size_t len)
+ *  {
+ *      return (len >= 13 && (data[0] > 19 && data[0] < 64));
+ *  }
+ *
+ *  // For RTP or RTCP, the V=2 which is in the high 2bits, 0xC0 (1100 0000)
+ *  bool srs_is_rtp_or_rtcp(const uint8_t *data, size_t len)
+ *  {
+ *      return (len >= 12 && (data[0] & 0xC0) == 0x80);
+ *  }
+ *
+ *  // For RTCP, PT is [128, 223] (or without marker [0, 95]).
+ *  // Literally, RTCP starts from 64 not 0, so PT is [192, 223] (or without marker [64, 95]).
+ *  // @note For RTP, the PT is [96, 127], or [224, 255] with marker.
+ *  bool srs_is_rtcp(const uint8_t *data, size_t len)
+ *  {
+ *      return (len >= 12) && (data[0] & 0x80) && (data[1] >= 192 && data[1] <= 223);
+ *  }
+ *
+ *  bool is_rtp_or_rtcp = srs_is_rtp_or_rtcp((uint8_t *)data, size);
+ *  bool is_rtcp = srs_is_rtcp((uint8_t *)data, size);
+ *  ... ...
+ *  if (!is_rtp_or_rtcp && srs_is_stun((uint8_t *)data, size)) {
+ *      ... ...
+ *  }
+ *
+ */
 struct FecHeader {
-    /** TODO: add semantics to distinguish us from other kinds of packets(e.g. STUN/RTP/RTCP)
+    /** semantics to distinguish us from other kinds of packets(e.g. DTLS/STUN/RTP/RTCP)
+     *  STUN:     00
+     *  RTP/RTCP: 10
+     *  DTLS:     not specified
      */
-    unsigned char mgc2 : 1;
-    unsigned char mgc1 : 1;
-    unsigned char fecv : 4;
-    unsigned char rtpv : 2;
+    unsigned char starting_bits : 2; ///< '11'
+    unsigned char red:            1; ///< 0: original packet, 1: redundant packet
+    unsigned char reserved_1:     1; ///< must be 0 for version 0
+    unsigned char version :       4; ///< version: currently only 0
 
-    char          reserved;
+    char          reserved_2;
     uint16_t      sequence_number;
 };
 

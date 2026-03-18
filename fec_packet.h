@@ -8,9 +8,11 @@
 class FecPacket : public IFecPacket,
                   public RefCount {
 public:
-    static FecPacket* create_instance(const uint8_t* data, int len, uint16_t sequence_number);
+    static FecPacket* create_instance(const uint8_t* data, int len, uint16_t sequence_number, bool is_red);
 
     static FecPacket* parse_from_buffer(const void* data, int len);
+
+    static bool is_fec_packet(const void* data, int len);
 
     unsigned long retain() override {
         return RefCount::retain();
@@ -31,9 +33,13 @@ public:
     uint32_t get_payload_size() const override;
 
 private:
-    FecPacket(const uint8_t* data, int len, uint16_t sequence_number);
+    FecPacket(const uint8_t* data, int len, uint16_t sequence_number, bool is_red);
 
     ~FecPacket() override = default;
+
+    std::vector<uint8_t> header_2_network(const FecHeader& header);
+
+    static FecHeader header_from_network(const void* data, int len);
 
 private:
 

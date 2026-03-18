@@ -128,7 +128,7 @@ add_to_redundant(int32_t* buf, FecEncDec* e, int i) {
 }
 
 static void
-send_data(int32_t* buf, FecEncoder* f) {
+send_data(int32_t* buf, FecEncoder* f, bool red) {
     auto h = (HeaderType*)(f->e.k * f->e.s + (char*)(f + 1));
     int s = f->e.s + sizeof (*h);
 
@@ -137,7 +137,7 @@ send_data(int32_t* buf, FecEncoder* f) {
     h->i = UINT32_TO_BE(f->e.i);
     ++f->e.i;
 
-    f->cb_send(f, h, s, f->user_data1, f->user_data2);
+    f->cb_send(f, h, s, red, f->user_data1, f->user_data2);
 }
 
 void
@@ -145,11 +145,11 @@ fec_encode(FecEncoder* f, int32_t* buf, bool& done) {
     done = false;
 
     add_to_redundant(buf, &f->e, f->e.i);
-    send_data(buf, f);
+    send_data(buf, f, false);
 
     if (f->e.i % (f->e.n + f->e.k) == f->e.n) {
         for (int i = 0; i < f->e.k; ++i) {
-            send_data((int32_t*)(i2redundant(i, f->e.k, f->e.w) * f->e.s + (char*)(f + 1)), f);
+            send_data((int32_t*)(i2redundant(i, f->e.k, f->e.w) * f->e.s + (char*)(f + 1)), f, true);
         }
 
         done = true;

@@ -6,11 +6,11 @@
 #include <cassert>
 
 void
-on_fec_send(FecEncoder* f, void* buf, size_t size, int64_t user_data1, int64_t user_data2) {
+on_fec_send(FecEncoder* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2) {
     auto encoder  = (BandFecEncoder*)user_data1;
     auto sequence = (uint16_t)user_data2;
 
-    encoder->on_new_block(sequence, (uint8_t*)buf, size);
+    encoder->on_new_block(sequence, red, (uint8_t*)buf, size);
 }
 
 BandFecEncoder::BandFecEncoder(IFecEncoderObserver* observer) :
@@ -167,8 +167,8 @@ BandFecEncoder::destroy_encoder() {
 }
 
 void
-BandFecEncoder::on_new_block(uint16_t sequence, const uint8_t* data, int len) {
-    auto packet = FecPacket::create_instance(data, len, sequence);
+BandFecEncoder::on_new_block(uint16_t sequence, bool red, const uint8_t* data, int len) {
+    auto packet = FecPacket::create_instance(data, len, sequence, red);
     if (!packet) {
         std::cerr << "could not create fec packet" << std::endl;
         return;

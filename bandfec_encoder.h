@@ -24,7 +24,7 @@ public:
     void flush() override;
 
 private:
-    void on_new_block(uint16_t sequence, const uint8_t* data, int len);
+    void on_new_block(uint16_t sequence, bool red, const uint8_t* data, int len);
 
     FecEncoder* create_encoder();
 
@@ -32,7 +32,7 @@ private:
 
 private:
 
-    friend void on_fec_send(FecEncoder* f, void* buf, size_t size, int64_t user_data1, int64_t user_data2);
+    friend void on_fec_send(FecEncoder* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2);
 
 
     enum { kFecParamW = 40, kFecParamG = 4 };
