@@ -8,9 +8,6 @@
 #include <sstream>
 
 struct FecEncoder;
-class BandFecEncoder;
-class IFecPacket;
-
 class BandFecEncoder : public IFecEncoder {
 public:
     BandFecEncoder(IFecEncoderObserver* observer);
@@ -33,7 +30,6 @@ private:
 private:
 
     friend void on_fec_send(FecEncoder* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2);
-
 
     enum { kFecParamW = 40, kFecParamG = 4 };
 

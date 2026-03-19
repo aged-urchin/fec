@@ -34,13 +34,6 @@ FecPacket::is_fec_packet(const void* data, int len) {
         return false;
     }
 
-    uint8_t reserved_1 = (first_byte >> 4) & 0x01;
-    uint8_t version    = first_byte & 0x0F;
-
-    if (0 == version && reserved_1 != 0) {
-        return false;
-    }
-
     return true;
 }
 

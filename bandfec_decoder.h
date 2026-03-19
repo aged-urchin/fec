@@ -6,8 +6,6 @@
 #include <map>
 
 struct FecDecoder;
-class BandFecDecoder;
-
 class BandFecDecoder : public IFecDecoder {
 public:
     BandFecDecoder(IFecDecoderObserver* observer);

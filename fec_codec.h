@@ -91,11 +91,19 @@ struct FecFragmentHeader {
  *      return (len >= 12) && (data[0] & 0x80) && (data[1] >= 192 && data[1] <= 223);
  *  }
  *
- *  bool is_rtp_or_rtcp = srs_is_rtp_or_rtcp((uint8_t *)data, size);
- *  bool is_rtcp = srs_is_rtcp((uint8_t *)data, size);
- *  ... ...
- *  if (!is_rtp_or_rtcp && srs_is_stun((uint8_t *)data, size)) {
+ *  srs_error_t SrsRtcSessionManager::on_udp_packet(SrsUdpMuxSocket *skt) {
+ *      char *data = skt->data();
+ *      int size = skt->size();
+ *      bool is_rtp_or_rtcp = srs_is_rtp_or_rtcp((uint8_t *)data, size);
+ *      bool is_rtcp = srs_is_rtcp((uint8_t *)data, size);
  *      ... ...
+ *      if (!is_rtp_or_rtcp && srs_is_stun((uint8_t *)data, size)) {
+ *          ... ...
+ *      } else {
+ *          if (srs_is_dtls((uint8_t *)data, size)) {
+ *              ... ... 
+ *          }
+ *      }
  *  }
  *
  */
@@ -103,11 +111,11 @@ struct FecHeader {
     /** semantics to distinguish us from other kinds of packets(e.g. DTLS/STUN/RTP/RTCP)
      *  STUN:     00
      *  RTP/RTCP: 10
-     *  DTLS:     not specified
+     *  DTLS:     not specified but should be within range [19, 64]
      */
     unsigned char starting_bits : 2; ///< '11'
+    unsigned char reserved_1 :    1; ///< not used
     unsigned char red:            1; ///< 0: original packet, 1: redundant packet
-    unsigned char reserved_1:     1; ///< must be 0 for version 0
     unsigned char version :       4; ///< version: currently only 0
 
     char          reserved_2;

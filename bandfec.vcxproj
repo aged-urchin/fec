@@ -126,6 +126,7 @@
     <ClCompile Include="bandfec.cpp" />
     <ClCompile Include="bandfec_decoder.cpp" />
     <ClCompile Include="bandfec_encoder.cpp" />
+    <ClCompile Include="fec_c_api.cpp" />
     <ClCompile Include="fec_codec.cpp" />
     <ClCompile Include="fec_packet.cpp" />
     <ClCompile Include="main.cpp" />
@@ -134,6 +135,7 @@
     <ClInclude Include="bandfec.h" />
     <ClInclude Include="bandfec_decoder.h" />
     <ClInclude Include="bandfec_encoder.h" />
+    <ClInclude Include="fec_c_api.h" />
     <ClInclude Include="fec_codec.h" />
     <ClInclude Include="fec_packet.h" />
     <ClInclude Include="network_conditioner.h" />
