@@ -38,11 +38,12 @@ FecPacket::is_fec_packet(const void* data, int len) {
 }
 
 FecPacket::FecPacket(const uint8_t* data, int len, uint16_t sequence_number, bool is_red) {
-    m_header.starting_bits   = 3; ///< '11'
-    m_header.red             = is_red ? 1 : 0;
-    m_header.reserved_1      = 0;
-    m_header.version         = 0;
-    m_header.reserved_2      = 0;
+    m_header.sig = 3; ///< '11'
+    m_header.typ = 0;
+    m_header.sid = 0;
+    m_header.red = is_red ? 1 : 0;
+
+    m_header.reserved        = 0;
     m_header.sequence_number = sequence_number;
 
     auto be_header = header_2_network(m_header);
@@ -79,30 +80,37 @@ FecPacket::get_payload_size() const {
 
 std::vector<uint8_t>
 FecPacket::header_2_network(const FecHeader& header) {
-    uint16_t seq = UINT16_TO_BE(header.sequence_number);
+    std::vector<uint8_t> buffer;
+    uint8_t byte0 = 0;
 
-    uint8_t send_buf[4] = { 0 };
-    send_buf[0] = ((header.starting_bits & 0x03) << 6) | ((header.red & 0x01) << 5) | ((header.reserved_1 & 0x01) << 4) | (header.version & 0x0F);
-    send_buf[1] = header.reserved_2 & 0xFF;
+    byte0 |= (header.sig & 0x03) << 6;
+    byte0 |= (header.typ & 0x03) << 4;
+    byte0 |= (header.sid & 0x07) << 1;
+    byte0 |= (header.red & 0x01) << 0;
 
-    memcpy(&send_buf[2], &seq, 2);
-    return { send_buf, send_buf + 4 };
+    buffer.push_back(byte0);
+    buffer.push_back(header.reserved);
+
+    uint16_t seq_net = UINT16_TO_BE(header.sequence_number);
+    buffer.push_back((uint8_t)(seq_net >> 8) & 0xff);
+    buffer.push_back((uint8_t)(seq_net & 0xff));
+
+    return buffer;
 }
 
 FecHeader
 FecPacket::header_from_network(const void* data, int len) {
-    FecHeader header = { 0 };
-    auto buf = (const uint8_t*)data;
+    FecHeader host_header;
 
-    header.starting_bits = (buf[0] >> 6) & 0x03;
-    header.red           = (buf[0] >> 5) & 0x01;
-    header.reserved_1    = (buf[0] >> 4) & 0x01;
-    header.version       = buf[0] & 0x0F;
-    header.reserved_2    = buf[1];
+    auto bytes = (uint8_t*)data;
 
-    uint16_t seq_net;
-    memcpy(&seq_net, &buf[2], 2);
-    header.sequence_number = UINT16_FROM_BE(seq_net);
+    host_header.sig = (bytes[0] >> 6) & 0x03;
+    host_header.typ = (bytes[0] >> 4) & 0x03;
+    host_header.sid = (bytes[0] >> 1) & 0x07;
+    host_header.red = (bytes[0] >> 0) & 0x01;
 
-    return header;
+    host_header.reserved = bytes[1];
+    host_header.sequence_number = UINT16_FROM_BE(*(uint16_t*)&bytes[2]);
+
+    return host_header;
 }

@@ -108,18 +108,18 @@ struct FecFragmentHeader {
  *
  */
 struct FecHeader {
-    /** semantics to distinguish us from other kinds of packets(e.g. DTLS/STUN/RTP/RTCP)
+    /** FEC:      11
      *  STUN:     00
      *  RTP/RTCP: 10
      *  DTLS:     not specified but should be within range [19, 64]
      */
-    unsigned char starting_bits : 2; ///< '11'
-    unsigned char reserved_1 :    1; ///< not used
-    unsigned char red:            1; ///< 0: original packet, 1: redundant packet
-    unsigned char version :       4; ///< version: currently only 0
+    uint8_t sig : 2; ///< signature: must be '11', distinguish from DTLS/STUN/RTP/RTCP
+    uint8_t typ : 2; ///< type:      header type
+    uint8_t sid : 3; ///< stream id: identify multiply fec streams
+    uint8_t red : 1; ///< redundant: 0 for original packet, 1 for redundant packet
 
-    char          reserved_2;
-    uint16_t      sequence_number;
+    uint8_t     reserved;
+    uint16_t    sequence_number;
 };
 
 /**  a fec packet memory layout
