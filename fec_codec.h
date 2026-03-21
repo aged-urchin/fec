@@ -206,6 +206,8 @@ public:
     virtual void decode(const uint8_t* data, int len) = 0;
 };
 
+extern FecFragmentHeader kEndingFragHeader;
+
 IFecEncoder*
 create_fec_encoder(IFecEncoderObserver* observer);
 

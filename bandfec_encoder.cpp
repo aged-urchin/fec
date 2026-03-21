@@ -87,7 +87,6 @@ BandFecEncoder::encode(const uint8_t* data, int data_len) {
              *   |     FecFragmentHeader     |     data     |
              *   |                           |              |
              *   `------------------------------------------`
-             *
              *   |<---------- Config.block_size ----------->|
              *
              */
@@ -104,6 +103,8 @@ BandFecEncoder::encode(const uint8_t* data, int data_len) {
             assert(0 == src_size);
             break;
         }
+        /** the trailing trivial bytes(the unused ending bytes that equal to or less than sizeof(FecFragmentHeader)) if present, will be ignored by the decoder
+         */
 
         /** block is full, or remaining space is not enough for another writing: encode this block
          */
@@ -126,8 +127,7 @@ BandFecEncoder::flush() {
 
     bool done = false;
     do {
-        FecFragmentHeader empty_header;
-        m_block.insert(m_block.end(), (char*)&empty_header, (char*)&empty_header + sizeof(FecFragmentHeader));
+        m_block.insert(m_block.end(), (char*)&kEndingFragHeader, (char*)&kEndingFragHeader + sizeof(FecFragmentHeader));
 
         fec_encode(m_encoder, (int32_t*)m_block.data(), done);
         m_block.clear();

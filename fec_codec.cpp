@@ -1,6 +1,8 @@
 #include "bandfec_encoder.h"
 #include "bandfec_decoder.h"
 
+FecFragmentHeader kEndingFragHeader{ 0, 0, 0, 0 };
+
 IFecEncoder*
 create_fec_encoder(IFecEncoderObserver* observer) {
     auto encoder = new BandFecEncoder(observer);

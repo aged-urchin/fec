@@ -144,6 +144,8 @@ BandFecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data
     uint8_t* remaining_data = (uint8_t*)data;
     int      remaining_len  = len;
 
+    /** there may be some trailing trivial bytes(with size <= sizeof(FecFragmentHeader))
+     */
     while (remaining_len > sizeof(FecFragmentHeader)) {
         auto frag_header = (FecFragmentHeader*)remaining_data;
         auto header      = frag_header->to_host();
@@ -180,9 +182,5 @@ BandFecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data
             m_pending_frames.erase(header.frame_number);
             delete frame;
         }
-    }
-
-    if (remaining_len != 0) {
-        std::cerr << "invalid argument" << std::endl;
     }
 }
