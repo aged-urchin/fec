@@ -1,31 +1,31 @@
-#include "bandfec_encoder.h"
-#include "bandfec.h"
+#include "fec_encoder.h"
 #include "fec_packet.h"
+#include "bandfec.h"
 
 #include <iostream>
 #include <cassert>
 
 void
-on_fec_send(FecEncoder* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2) {
-    auto encoder  = (BandFecEncoder*)user_data1;
+on_fec_send(BandFecEncoder* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2) {
+    auto encoder  = (FecEncoder*)user_data1;
     auto sequence = (uint16_t)user_data2;
 
     encoder->on_new_block(sequence, red, (uint8_t*)buf, size);
 }
 
-BandFecEncoder::BandFecEncoder(IFecEncoderObserver* observer) :
+FecEncoder::FecEncoder(IFecEncoderObserver* observer) :
 m_observer(observer) {
 
 }
 
-BandFecEncoder::~BandFecEncoder() {
+FecEncoder::~FecEncoder() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     destroy_encoder();
 }
 
 bool
-BandFecEncoder::set_param(int block_size_in_bytes, int data_blocks_in_group, int redundant_blocks_in_group) {
+FecEncoder::set_param(int block_size_in_bytes, int data_blocks_in_group, int redundant_blocks_in_group) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     auto aligned_size = (block_size_in_bytes / (4 * kFecParamG)) * (4 * kFecParamG);
@@ -43,7 +43,7 @@ BandFecEncoder::set_param(int block_size_in_bytes, int data_blocks_in_group, int
 }
 
 void
-BandFecEncoder::encode(const uint8_t* data, int data_len) {
+FecEncoder::encode(const uint8_t* data, int data_len) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     FecFragmentHeader header;
@@ -109,18 +109,18 @@ BandFecEncoder::encode(const uint8_t* data, int data_len) {
         /** block is full, or remaining space is not enough for another writing: encode this block
          */
         bool done = false;
-        fec_encode(m_encoder, (int32_t*)m_block.data(), done);
+        bandfec_encode(m_encoder, (int32_t*)m_block.data(), done);
         m_block.clear();
 
         if (done) {
-            destroy_fec_encoder(m_encoder);
+            destroy_bandfec_encoder(m_encoder);
             m_encoder = nullptr;
         }
     }
 }
 
 void
-BandFecEncoder::flush() {
+FecEncoder::flush() {
     if (!m_encoder) {
         return;
     }
@@ -129,25 +129,25 @@ BandFecEncoder::flush() {
     do {
         m_block.insert(m_block.end(), (char*)&kEndingFragHeader, (char*)&kEndingFragHeader + sizeof(FecFragmentHeader));
 
-        fec_encode(m_encoder, (int32_t*)m_block.data(), done);
+        bandfec_encode(m_encoder, (int32_t*)m_block.data(), done);
         m_block.clear();
     } while (!done);
     
-    destroy_fec_encoder(m_encoder);
+    destroy_bandfec_encoder(m_encoder);
     m_encoder = nullptr;
 }
 
-FecEncoder*
-BandFecEncoder::create_encoder() {
+BandFecEncoder*
+FecEncoder::create_encoder() {
     auto encoder =
-        create_fec_encoder(m_config.block_size,
-                           m_config.blocks,
-                           m_config.red_blocks,
-                           kFecParamW,
-                           kFecParamG,
-                           &on_fec_send,
-                           (int64_t)this,
-                           m_group_num++); ///< 0, 1, 2, ...
+        create_bandfec_encoder(m_config.block_size,
+                               m_config.blocks,
+                               m_config.red_blocks,
+                               kFecParamW,
+                               kFecParamG,
+                               &on_fec_send,
+                               (int64_t)this,
+                               m_group_num++); ///< 0, 1, 2, ...
     if (encoder) {
         if (!m_active_config.is_equal(m_config)) {
             std::cerr << "active config changed to " << m_config.to_string() << std::endl;
@@ -159,15 +159,15 @@ BandFecEncoder::create_encoder() {
 }
 
 void
-BandFecEncoder::destroy_encoder() {
+FecEncoder::destroy_encoder() {
     if (m_encoder) {
-        destroy_fec_encoder(m_encoder);
+        destroy_bandfec_encoder(m_encoder);
         m_encoder = nullptr;
     }
 }
 
 void
-BandFecEncoder::on_new_block(uint16_t sequence, bool red, const uint8_t* data, int len) {
+FecEncoder::on_new_block(uint16_t sequence, bool red, const uint8_t* data, int len) {
     auto packet = FecPacket::create_instance(data, len, sequence, red);
     if (!packet) {
         std::cerr << "could not create fec packet" << std::endl;

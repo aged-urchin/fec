@@ -1,11 +1,11 @@
-#include "bandfec_encoder.h"
-#include "bandfec_decoder.h"
+#include "fec_encoder.h"
+#include "fec_decoder.h"
 
 FecFragmentHeader kEndingFragHeader{ 0, 0, 0, 0 };
 
 IFecEncoder*
 create_fec_encoder(IFecEncoderObserver* observer) {
-    auto encoder = new BandFecEncoder(observer);
+    auto encoder = new FecEncoder(observer);
     return encoder;
 }
 
@@ -16,7 +16,7 @@ destroy_fec_encoder(IFecEncoder* encoder) {
 
 IFecDecoder*
 create_fec_decoder(IFecDecoderObserver* observer) {
-    auto decoder = new BandFecDecoder(observer);
+    auto decoder = new FecDecoder(observer);
     return decoder;
 }
 

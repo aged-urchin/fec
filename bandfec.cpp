@@ -41,15 +41,15 @@ MAC(int multiplier, int32_t* source, int32_t* dest, int g, int s) {
     }
 }
 
-FecEncoder*
-create_fec_encoder(uint16_t     s,
-                   uint16_t     n,
-                   uint16_t     k,
-                   uint8_t      w,
-                   uint8_t      g,
-                   fec_send     cb_send,
-                   int64_t      user_data1,
-                   int64_t      user_data2) {
+BandFecEncoder*
+create_bandfec_encoder(uint16_t     s,
+                       uint16_t     n,
+                       uint16_t     k,
+                       uint8_t      w,
+                       uint8_t      g,
+                       fec_send     cb_send,
+                       int64_t      user_data1,
+                       int64_t      user_data2) {
     if (s % (g * sizeof (int32_t)) != 0 || g > 16) {
         /** illegal Galois field size
          */
@@ -58,22 +58,22 @@ create_fec_encoder(uint16_t     s,
 
     /** memory layout
      *
-     *  .----------------------.
-     *  |      FecEncoder      |
-     *  |----------------------|
-     *  |     redundant 0      |
-     *  |----------------------|
-     *  |        ... ...       |
-     *  |----------------------|
-     *  |    redundant k - 1   |
-     *  |----------------------|
-     *  |      HeaderType      |
-     *  |----------------------|
-     *  |          s           |
-     *  .----------------------.
+     *  .-----------------------.
+     *  |     BandFecEncoder    |
+     *  |-----------------------|
+     *  |      redundant 0      |
+     *  |-----------------------|
+     *  |        ... ...        |
+     *  |-----------------------|
+     *  |    redundant k - 1    |
+     *  |-----------------------|
+     *  |   BandFecHeaderType   |
+     *  |-----------------------|
+     *  |           s           |
+     *  .-----------------------.
      *
      */
-    auto f = (FecEncoder*)malloc(sizeof (FecEncoder) + sizeof (HeaderType) + s * (k + 1));
+    auto f = (BandFecEncoder*)malloc(sizeof(BandFecEncoder) + sizeof(BandFecHeaderType) + s * (k + 1));
     if (!f) {
         /** out of memory
          */
@@ -92,7 +92,7 @@ create_fec_encoder(uint16_t     s,
     f->e.g = g;
     f->e.i = 0;
 
-    auto h = (HeaderType*)(s * k + (char*) (f + 1));
+    auto h = (BandFecHeaderType*)(s * k + (char*) (f + 1));
 
     h->s = UINT16_TO_BE(s);
     h->n = UINT16_TO_BE(n);
@@ -106,7 +106,7 @@ create_fec_encoder(uint16_t     s,
 }
 
 static void
-add_to_redundant(int32_t* buf, FecEncDec* e, int i) {
+add_to_redundant(int32_t* buf, BandFecEncDec* e, int i) {
     /** this is called by both the encoder and the decoder when they process the payload. But this code is also repeated where the decoder sets up the matrix. 
      *  i suppose a lot of pseudo random stuff can be tried, but in the end nature will add its own randomness by way of the packets it destroys.
      */
@@ -128,8 +128,8 @@ add_to_redundant(int32_t* buf, FecEncDec* e, int i) {
 }
 
 static void
-send_data(int32_t* buf, FecEncoder* f, bool red) {
-    auto h = (HeaderType*)(f->e.k * f->e.s + (char*)(f + 1));
+send_data(int32_t* buf, BandFecEncoder* f, bool red) {
+    auto h = (BandFecHeaderType*)(f->e.k * f->e.s + (char*)(f + 1));
     int s = f->e.s + sizeof (*h);
 
     memcpy(h + 1, buf, f->e.s);
@@ -141,7 +141,7 @@ send_data(int32_t* buf, FecEncoder* f, bool red) {
 }
 
 void
-fec_encode(FecEncoder* f, int32_t* buf, bool& done) {
+bandfec_encode(BandFecEncoder* f, int32_t* buf, bool& done) {
     done = false;
 
     add_to_redundant(buf, &f->e, f->e.i);
@@ -157,13 +157,13 @@ fec_encode(FecEncoder* f, int32_t* buf, bool& done) {
 }
 
 void
-destroy_fec_encoder(FecEncoder* f) {
+destroy_bandfec_encoder(BandFecEncoder* f) {
     free(f);
 }
 
-FecDecoder*
-create_fec_decoder(fec_recv cb_recv, int64_t user_data1, int64_t user_data2) {
-    FecDecoder* f = (FecDecoder*)malloc(sizeof(*f));
+BandFecDecoder*
+create_bandfec_decoder(fec_recv cb_recv, int64_t user_data1, int64_t user_data2) {
+    BandFecDecoder* f = (BandFecDecoder*)malloc(sizeof(*f));
 
     f->user_data1           = user_data1;
     f->user_data2           = user_data2;
@@ -179,8 +179,8 @@ create_fec_decoder(fec_recv cb_recv, int64_t user_data1, int64_t user_data2) {
 }
 
 void
-fec_parse_block(void* buf, size_t size, HeaderType& header) {
-    auto h = (HeaderType*)buf;
+bandfec_parse_block(void* buf, size_t size, BandFecHeaderType& header) {
+    auto h = (BandFecHeaderType*)buf;
 
     header.s = UINT16_FROM_BE(h->s);
     header.n = UINT16_FROM_BE(h->n);
@@ -191,12 +191,12 @@ fec_parse_block(void* buf, size_t size, HeaderType& header) {
 }
 
 size_t
-fec_decode(FecDecoder* f, void* buf, size_t size) {
-    auto h = (HeaderType*)buf;
+bandfec_decode(BandFecDecoder* f, void* buf, size_t size) {
+    auto h = (BandFecHeaderType*)buf;
     int i, must_send = 0, hi = UINT32_FROM_BE(h->i);
 
     if (!f->e) {
-        f->e             = (FecEncDec*)calloc(1, sizeof (*f->e) + UINT16_FROM_BE(h->s)*UINT16_FROM_BE(h->k));
+        f->e             = (BandFecEncDec*)calloc(1, sizeof (*f->e) + UINT16_FROM_BE(h->s)*UINT16_FROM_BE(h->k));
         f->e->s          = UINT16_FROM_BE(h->s);
         f->e->n          = UINT16_FROM_BE(h->n);
         f->e->k          = UINT16_FROM_BE(h->k);
@@ -218,7 +218,7 @@ fec_decode(FecDecoder* f, void* buf, size_t size) {
         must_send = 1;
         do {
             if (0 == (f->e->i % (f->e->n + f->e->k))) {
-                flush_fec_decoder(f);
+                flush_bandfec_decoder(f);
             }
 
             if (f->e->i < hi) {
@@ -258,7 +258,7 @@ fec_decode(FecDecoder* f, void* buf, size_t size) {
 }
 
 void
-flush_fec_decoder(FecDecoder* f) {
+flush_bandfec_decoder(BandFecDecoder* f) {
 #define BITS ((int32_t)sizeof(int32_t) * 8) ///< the # of columns stored in each *coef
     struct Temp {
         int start, len, pivotLog, *coef;
@@ -528,7 +528,7 @@ flush_fec_decoder(FecDecoder* f) {
 }
 
 void
-destroy_fec_decoder(FecDecoder* f) {
+destroy_bandfec_decoder(BandFecDecoder* f) {
     if (f) {
         free(f->e);
         free(f);

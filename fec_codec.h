@@ -38,6 +38,13 @@ struct FecFragmentHeader {
     }
 };
 
+/** rtp fec extension (with 'FecHeader::typ' == 1)
+ */
+struct RtpFecExt {
+    uint16_t base_sequence_num; ///< the sequence number of the first rtp packet
+    uint16_t num_packets;       ///< number consuccessive rtp packets
+};
+
 /** rtp packet format                                                                  rtcp packet format
  *  0                   1                   2                   3                      0                   1                   2                   3
  *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1                    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -113,27 +120,32 @@ struct FecHeader {
      *  RTP/RTCP: 10
      *  DTLS:     not specified but should be within range [19, 64]
      */
-    uint8_t sig : 2; ///< signature: must be '11', distinguish from DTLS/STUN/RTP/RTCP
-    uint8_t typ : 2; ///< type:      header type
-    uint8_t sid : 3; ///< stream id: identify multiply fec streams
-    uint8_t red : 1; ///< redundant: 0 for original packet, 1 for redundant packet
+    uint8_t     sig : 2; ///< signature: must be '11', distinguish from DTLS/STUN/RTP/RTCP
+    uint8_t     typ : 2; ///< type:      header type
+    uint8_t     sid : 3; ///< stream id: identify multiply fec streams
+    uint8_t     red : 1; ///< redundant: 0 for original packet, 1 for redundant packet
 
     uint8_t     reserved;
     uint16_t    sequence_number;
+
+    /** variable-length extension field for additional FEC header information
+     *  only valid and contains data when header type (typ) is non-zero
+     */
+    char        ext[0];
 };
 
-/**  a fec packet memory layout
+/**  a fec packet memory layout(with 'FecHeader::typ' == 0)
  *
  *   |<------------------------------- extra header bytes ------------------------------->| 
- *   .___________________________________________________________________________________________________________.
- *   |                      |                           |                                 |                      |
- *   |  FecHeader(4 bytes)  |   HeaderType (12 bytes)   |   FecFragmentHeader (8 bytes)   |    data (n bytes)    |
- *   |                      |                           |                                 |                      |
- *   `-----------------------------------------------------------------------------------------------------------`
- *                                                                                        |<----- user data ---->|
- *                                                      |<------------------ HeaderType::s --------------------->|
- *                          |<----------------------------- one bandfec data block ----------------------------->|
- *   |<----------------------------------------- fec packet buffer --------------------------------------------->|
+ *   .______________________________________________________________________________________________________________.
+ *   |                      |                              |                                 |                      |
+ *   |  FecHeader(4 bytes)  | BandFecHeaderType (12 bytes) |   FecFragmentHeader (8 bytes)   |    data (n bytes)    |
+ *   |                      |                              |                                 |                      |
+ *   `--------------------------------------------------------------------------------------------------------------`
+ *                                                                                           |<----- user data ---->|
+ *                                                         |<------------------ HeaderType::s --------------------->|
+ *                          |<------------------------------- one bandfec data block ------------------------------>|
+ *   |<------------------------------------------ fec packet buffer ----------------------------------------------->|
  *
  */
 class IFecPacket {

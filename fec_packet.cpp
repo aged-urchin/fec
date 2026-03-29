@@ -15,7 +15,7 @@ FecPacket::parse_from_buffer(const void* data, int len) {
     }
 
     auto header = header_from_network(data, len);
-    auto packet = new FecPacket((uint8_t*)data + sizeof(m_header), len - sizeof(m_header), header.sequence_number, header.red);
+    auto packet = new FecPacket((uint8_t*)data + sizeof(FecHeader), len - sizeof(FecHeader), header.sequence_number, header.red);
 
     return packet;
 }
@@ -38,13 +38,15 @@ FecPacket::is_fec_packet(const void* data, int len) {
 }
 
 FecPacket::FecPacket(const uint8_t* data, int len, uint16_t sequence_number, bool is_red) {
-    m_header.sig = 3; ///< '11'
-    m_header.typ = 0;
-    m_header.sid = 0;
-    m_header.red = is_red ? 1 : 0;
+    m_header = new FecHeader();
 
-    m_header.reserved        = 0;
-    m_header.sequence_number = sequence_number;
+    m_header->sig = 3; ///< '11'
+    m_header->typ = 0;
+    m_header->sid = 0;
+    m_header->red = is_red ? 1 : 0;
+
+    m_header->reserved        = 0;
+    m_header->sequence_number = sequence_number;
 
     auto be_header = header_2_network(m_header);
 
@@ -52,9 +54,14 @@ FecPacket::FecPacket(const uint8_t* data, int len, uint16_t sequence_number, boo
     m_data.insert(m_data.end(), data, data + len);
 }
 
+FecPacket::~FecPacket() {
+    delete m_header;
+    m_header = nullptr;
+}
+
 bool
 FecPacket::get_header(FecHeader& header) const {
-    header = m_header;
+    header = *m_header;
     return true;
 }
 
@@ -70,28 +77,28 @@ FecPacket::get_buffer_size() const {
 
 const void*
 FecPacket::get_payload() const {
-    return m_data.data() + sizeof(m_header);
+    return m_data.data() + sizeof(FecHeader);
 }
 
 uint32_t
 FecPacket::get_payload_size() const {
-    return m_data.size() - sizeof(m_header);
+    return m_data.size() - sizeof(FecHeader);
 }
 
 std::vector<uint8_t>
-FecPacket::header_2_network(const FecHeader& header) {
+FecPacket::header_2_network(const FecHeader* header) {
     std::vector<uint8_t> buffer;
     uint8_t byte0 = 0;
 
-    byte0 |= (header.sig & 0x03) << 6;
-    byte0 |= (header.typ & 0x03) << 4;
-    byte0 |= (header.sid & 0x07) << 1;
-    byte0 |= (header.red & 0x01) << 0;
+    byte0 |= (header->sig & 0x03) << 6;
+    byte0 |= (header->typ & 0x03) << 4;
+    byte0 |= (header->sid & 0x07) << 1;
+    byte0 |= (header->red & 0x01) << 0;
 
     buffer.push_back(byte0);
-    buffer.push_back(header.reserved);
+    buffer.push_back(header->reserved);
 
-    uint16_t seq_net = UINT16_TO_BE(header.sequence_number);
+    uint16_t seq_net = UINT16_TO_BE(header->sequence_number);
     buffer.push_back((uint8_t)(seq_net >> 8) & 0xff);
     buffer.push_back((uint8_t)(seq_net & 0xff));
 

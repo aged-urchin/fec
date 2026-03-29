@@ -1,16 +1,17 @@
-#ifndef ___BANDFEC_DECODER_H___
-#define ___BANDFEC_DECODER_H___
+#ifndef ___FEC_DECODER_H___
+#define ___FEC_DECODER_H___
 
 #include "fec_codec.h"
+
 #include <vector>
 #include <map>
 
-struct FecDecoder;
-class BandFecDecoder : public IFecDecoder {
+struct BandFecDecoder;
+class FecDecoder : public IFecDecoder {
 public:
-    BandFecDecoder(IFecDecoderObserver* observer);
+    FecDecoder(IFecDecoderObserver* observer);
 
-    ~BandFecDecoder() override;
+    ~FecDecoder() override;
 
     void set_reorder_window_size(int size) override;
 
@@ -22,7 +23,7 @@ private:
     void remove_decoder(uint16_t sequence);
 
 private:
-    friend void on_fec_receive(FecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2);
+    friend void on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2);
 
     struct ReconstructedFrame {
         std::vector<uint8_t>    data;
@@ -34,8 +35,8 @@ private:
     };
 
     struct Decoder {
-        int             no_packets_cnt{ 0 }; ///< death counter
-        FecDecoder*     decoder{ nullptr };
+        int                 no_packets_cnt{ 0 }; ///< death counter
+        BandFecDecoder*     decoder{ nullptr };
     };
 
     int                                     m_reorder_window_size{ 3 };
@@ -44,4 +45,4 @@ private:
     std::map<uint16_t, Decoder*>            m_seq_decoders;   ///< FecHeader::sequence_number
 };
 
-#endif ///< ___BANDFEC_DECODER_H___
+#endif ///< ___FEC_DECODER_H___

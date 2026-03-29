@@ -3,6 +3,7 @@
 
 #include "fec_codec.h"
 #include "refcount.h"
+
 #include <vector>
 
 class FecPacket : public IFecPacket,
@@ -35,15 +36,15 @@ public:
 private:
     FecPacket(const uint8_t* data, int len, uint16_t sequence_number, bool is_red);
 
-    ~FecPacket() override = default;
+    ~FecPacket() override;
 
-    std::vector<uint8_t> header_2_network(const FecHeader& header);
+    std::vector<uint8_t> header_2_network(const FecHeader* header);
 
     static FecHeader header_from_network(const void* data, int len);
 
 private:
 
-    FecHeader               m_header;
+    FecHeader*              m_header{ nullptr };
     std::vector<uint8_t>    m_data;
 };
 
