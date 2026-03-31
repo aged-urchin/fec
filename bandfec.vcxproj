@@ -125,23 +125,27 @@
   <ItemGroup>
     <ClCompile Include="bandfec.cpp" />
     <ClCompile Include="fec_decoder.cpp" />
+    <ClCompile Include="fec_decoder2.cpp" />
+    <ClCompile Include="fec_decoder_base.cpp" />
     <ClCompile Include="fec_encoder.cpp" />
     <ClCompile Include="fec_codec.cpp" />
     <ClCompile Include="fec_encoder2.cpp" />
     <ClCompile Include="fec_encoder_base.cpp" />
     <ClCompile Include="fec_packet.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="test\main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bandfec.h" />
     <ClInclude Include="fec_decoder.h" />
+    <ClInclude Include="fec_decoder2.h" />
+    <ClInclude Include="fec_decoder_base.h" />
     <ClInclude Include="fec_encoder.h" />
     <ClInclude Include="fec_codec.h" />
     <ClInclude Include="fec_encoder2.h" />
     <ClInclude Include="fec_encoder_base.h" />
     <ClInclude Include="fec_packet.h" />
-    <ClInclude Include="network_conditioner.h" />
-    <ClInclude Include="refcount.h" />
+    <ClInclude Include="test\test.h" />
+    <ClInclude Include="test\test2.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

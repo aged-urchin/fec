@@ -38,18 +38,25 @@ struct FecFragmentHeader {
     }
 };
 
+/** extension type
+ */
+enum FecExtType {
+    kFecExtNull = 0,
+    kFecExtRtp  = 1,
+};
+
 /** rtp fec extension (with 'FecHeader::typ' == 1)
  */
 struct RtpFecExt {
-    uint16_t base_sequence_num; ///< the sequence number of the first rtp packet
-    uint16_t num_packets;       ///< number consuccessive rtp packets
+    uint16_t base_sequence_num{ 0 }; ///< the sequence number of the first rtp packet
+    uint16_t num_packets{ 0 };       ///< number consuccessive rtp packets
 };
 
 /** rtp packet format                                                                  rtcp packet format
  *  0                   1                   2                   3                      0                   1                   2                   3
  *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1                    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *  |V=2|P|X| CC  |M|      PT     |         sequence number         |                  |V=2|P|    RC   |   PT          |             length            |
+ *  |V=2|P|X|  CC   |M|      PT     |         sequence number       |                  |V=2|P|    RC   |       PT      |             length            |
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  *  |                            timestamp                          |                  |                     SSRC of sender/participant                |
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
@@ -134,18 +141,34 @@ struct FecHeader {
     char        ext[0];
 };
 
-/**  a fec packet memory layout(with 'FecHeader::typ' == 0)
+/**  fec packet memory layout
  *
- *   |<------------------------------- extra header bytes ------------------------------->| 
+ *   with 'FecHeader::typ' == 0:
+ *
+ *   |<--------------------------- extra header bytes (24 bytes) --------------------------->| 
  *   .______________________________________________________________________________________________________________.
  *   |                      |                              |                                 |                      |
  *   |  FecHeader(4 bytes)  | BandFecHeaderType (12 bytes) |   FecFragmentHeader (8 bytes)   |    data (n bytes)    |
  *   |                      |                              |                                 |                      |
  *   `--------------------------------------------------------------------------------------------------------------`
  *                                                                                           |<----- user data ---->|
- *                                                         |<------------------ HeaderType::s --------------------->|
- *                          |<------------------------------- one bandfec data block ------------------------------>|
- *   |<------------------------------------------ fec packet buffer ----------------------------------------------->|
+ *                                                         |<---------------- BandFecHeaderType::s ---------------->|
+ *                          |<--------------------------------- bandfec data block -------------------------------->|
+ *   |<-------------------------------------------- fec packet buffer --------------------------------------------->|
+ *
+ *
+ *   with 'FecHeader::typ' == 1:
+ *
+ *   |<---------- extra header bytes (20 bytes)----------->| 
+ *   .______________________________________________________________________________________________________________.
+ *   |                      |                              |                                                        |
+ *   |  FecHeader(8 bytes)  | BandFecHeaderType (12 bytes) |                    data (n bytes)                      |
+ *   |                      |                              |                                                        |
+ *   `--------------------------------------------------------------------------------------------------------------`
+ *                                                         |<--------------------- user data ---------------------->|
+ *                                                         |<------------------- HeaderType::s -------------------->|
+ *                          |<--------------------------------- bandfec data block -------------------------------->|
+ *   |<-------------------------------------------- fec packet buffer --------------------------------------------->|
  *
  */
 class IFecPacket {
@@ -154,7 +177,7 @@ public:
 
     virtual unsigned long release() = 0;
 
-    virtual bool get_header(FecHeader& header) const = 0;
+    virtual const FecHeader* get_header() const = 0;
 
     /** get header buffer and data buffer as a whole(e.g. FecHeader + HeaderType + FecFragmentHeader + user data)
      */
@@ -184,7 +207,9 @@ class IFecEncoder {
 public:
     virtual ~IFecEncoder() = default;
 
-    virtual bool set_param(int block_size_in_bytes, int data_blocks_in_group, int redundant_blocks_in_group) = 0;
+    virtual bool set_block_size(int size_in_bytes) = 0;
+
+    virtual bool set_red_params(int blocks_in_group, int red_blocks_in_group) = 0;
 
     /** encode one frame (e.g. one udp packet)
      */
@@ -220,6 +245,14 @@ public:
 
 extern FecFragmentHeader kEndingFragHeader;
 
+const int fec_header_size(const uint8_t type);
+
+FecHeader* create_empty_fec_header(const uint8_t type);
+
+void destroy_fec_header(FecHeader* header);
+
+FecHeader* duplicate_fec_header(const FecHeader* header);
+
 IFecEncoder*
 create_fec_encoder(IFecEncoderObserver* observer);
 
@@ -231,5 +264,17 @@ create_fec_decoder(IFecDecoderObserver* observer);
 
 void
 destroy_fec_decoder(IFecDecoder* decoder);
+
+IFecEncoder*
+create_fec_encoder2(IFecEncoderObserver* observer);
+
+void
+destroy_fec_encoder2(IFecEncoder* encoder);
+
+IFecDecoder*
+create_fec_decoder2(IFecDecoderObserver* observer);
+
+void
+destroy_fec_decoder2(IFecDecoder* decoder);
 
 #endif ///< ___FEC_CODEC_H___

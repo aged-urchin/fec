@@ -13,7 +13,11 @@ public:
 
     ~FecEncoderBase() override;
 
-    bool set_param(int block_size_in_bytes, int data_blocks_in_group, int redundant_blocks_in_group) override;
+    bool set_block_size(int size_in_bytes) override;
+
+    bool set_red_params(int blocks_in_group, int red_blocks_in_group) override;
+
+    void encode(const uint8_t* data, int data_len) override;
 
     void flush() override;
 
@@ -22,7 +26,15 @@ protected:
 
     void destroy_encoder();
 
+    bool do_set_block_size(int size_in_bytes);
+
+    bool do_set_red_params(int blocks_in_group, int red_blocks_in_group);
+
+    virtual void do_encode(const uint8_t* data, int data_len) = 0;
+
     virtual void do_flush() = 0;
+
+    virtual FecHeader* make_fec_header(uint16_t sequence, bool red) = 0;
 
 private:
     friend void on_fec_send(BandFecEncoder* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2);
@@ -30,8 +42,6 @@ private:
     void on_new_block(uint16_t sequence, bool red, const uint8_t* data, int len);
 
 private:
-
-    enum { kFecParamW = 40, kFecParamG = 4 };
 
     struct Config {
         int   block_size{ 0 };
@@ -50,17 +60,21 @@ private:
         }
     };
 
-    Config                      m_config;
+    enum {
+        kFecParamW = 40, kFecParamG = 4
+    };
+
+    bool                        m_flushed{ false };
     uint16_t                    m_group_num{ 0 };
     IFecEncoderObserver*        m_observer{ nullptr };
 
+    std::mutex                  m_mutex;
+
 protected:
 
+    Config                      m_config;
     Config                      m_active_config;
     BandFecEncoder*             m_encoder{ nullptr };
-    uint16_t                    m_frame_num{ 0 };
-
-    std::mutex                  m_mutex;
 };
 
 #endif ///< ___FEC_ENCODER_BASE_H___

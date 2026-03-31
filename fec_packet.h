@@ -9,7 +9,7 @@
 class FecPacket : public IFecPacket,
                   public RefCount {
 public:
-    static FecPacket* create_instance(const uint8_t* data, int len, uint16_t sequence_number, bool is_red);
+    static FecPacket* create_instance(const FecHeader* header, const uint8_t* data, int len);
 
     static FecPacket* parse_from_buffer(const void* data, int len);
 
@@ -23,7 +23,7 @@ public:
         return RefCount::release();
     }
 
-    bool get_header(FecHeader& header) const override;
+    const FecHeader* get_header() const override;
 
     const void* get_buffer() const override;
 
@@ -34,13 +34,15 @@ public:
     uint32_t get_payload_size() const override;
 
 private:
-    FecPacket(const uint8_t* data, int len, uint16_t sequence_number, bool is_red);
+    FecPacket(const FecHeader* header, const uint8_t* data, int len);
+
+    FecPacket(const uint8_t* data, int len);
 
     ~FecPacket() override;
 
     std::vector<uint8_t> header_2_network(const FecHeader* header);
 
-    static FecHeader header_from_network(const void* data, int len);
+    static FecHeader* header_from_network(const void* data, int len);
 
 private:
 

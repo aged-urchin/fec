@@ -8,13 +8,16 @@ class FecEncoder : public FecEncoderBase {
 public:
     FecEncoder(IFecEncoderObserver* observer);
 
-    void encode(const uint8_t* data, int data_len) override;
+private:
+    void do_encode(const uint8_t* data, int data_len) override;
+
+    void do_flush() override;
+
+    FecHeader* make_fec_header(uint16_t sequence, bool red) override;
 
 private:
-    void do_flush();
 
-private:
-
+    uint16_t                m_frame_num{ 0 };
     std::vector<uint8_t>    m_block;
 };
 

@@ -10,9 +10,7 @@ FecEncoderBase(observer) {
 }
 
 void
-FecEncoder::encode(const uint8_t* data, int data_len) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
+FecEncoder::do_encode(const uint8_t* data, int data_len) {
     FecFragmentHeader header;
     char* src      = (char*)data;
     int   src_size = data_len;
@@ -83,6 +81,10 @@ FecEncoder::encode(const uint8_t* data, int data_len) {
 
 void
 FecEncoder::do_flush() {
+    if (!m_encoder) {
+        return;
+    }
+
     bool done = false;
     do {
         m_block.insert(m_block.end(), (char*)&kEndingFragHeader, (char*)&kEndingFragHeader + sizeof(FecFragmentHeader));
@@ -90,4 +92,19 @@ FecEncoder::do_flush() {
         bandfec_encode(m_encoder, (int32_t*)m_block.data(), done);
         m_block.clear();
     } while (!done);
+}
+
+FecHeader*
+FecEncoder::make_fec_header(uint16_t sequence, bool red) {
+    FecHeader* header = new FecHeader();
+
+    header->sig = 0b11; ///< 3
+    header->typ = kFecExtNull;
+    header->sid = 0;
+    header->red = red ? 1 : 0;
+
+    header->reserved        = 0;
+    header->sequence_number = sequence;
+
+    return header;
 }

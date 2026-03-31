@@ -3,7 +3,6 @@
 #include "bandfec.h"
 
 #include <iostream>
-#include <cassert>
 
 void
 on_fec_send(BandFecEncoder* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2) {
@@ -14,7 +13,7 @@ on_fec_send(BandFecEncoder* f, void* buf, size_t size, bool red, int64_t user_da
 }
 
 FecEncoderBase::FecEncoderBase(IFecEncoderObserver* observer) :
-    m_observer(observer) {
+m_observer(observer) {
 
 }
 
@@ -25,26 +24,55 @@ FecEncoderBase::~FecEncoderBase() {
 }
 
 bool
-FecEncoderBase::set_param(int block_size_in_bytes, int data_blocks_in_group, int redundant_blocks_in_group) {
+FecEncoderBase::set_block_size(int size_in_bytes) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    auto aligned_size = (block_size_in_bytes / (4 * kFecParamG)) * (4 * kFecParamG);
-    if (aligned_size <= sizeof(FecFragmentHeader) || data_blocks_in_group <= 0 || redundant_blocks_in_group <= 0) {
-        std::cerr << "invalid arguments" << std::endl;
-        return false;
+    return do_set_block_size(size_in_bytes);
+}
+
+bool
+FecEncoderBase::set_red_params(int blocks_in_group, int red_blocks_in_group) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    return do_set_red_params(blocks_in_group, red_blocks_in_group);
+}
+
+void
+FecEncoderBase::encode(const uint8_t* data, int data_len) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (m_flushed) {
+        std::cerr << "could not encode after flush" << std::endl;
+        return;
     }
 
-    m_config.block_size = aligned_size;
-    m_config.blocks     = data_blocks_in_group;
-    m_config.red_blocks = redundant_blocks_in_group;
+    do_encode(data, data_len);
+}
 
-    std::cerr << "new config set: " << m_config.to_string() << std::endl;
-    return true;
+void
+FecEncoderBase::flush() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    std::cerr << "flushing ..." << std::endl;
+    if (m_flushed) {
+        std::cerr << "already flushed" << std::endl;
+        return;
+    }
+
+    do_flush();
+
+    if (m_encoder) {
+        destroy_bandfec_encoder(m_encoder);
+        m_encoder = nullptr;
+    }
+
+    m_flushed = true;
 }
 
 BandFecEncoder*
 FecEncoderBase::create_encoder() {
-    if (!m_observer || 0 == m_config.block_size) {
+    if (!m_observer ||
+        0 == m_config.block_size || 0 == m_config.blocks || 0 == m_config.red_blocks) {
         std::cerr << "observer or param not set" << std::endl;
         return nullptr;
     }
@@ -69,18 +97,6 @@ FecEncoderBase::create_encoder() {
 }
 
 void
-FecEncoderBase::flush() {
-    if (!m_encoder) {
-        return;
-    }
-
-    do_flush();
-
-    destroy_bandfec_encoder(m_encoder);
-    m_encoder = nullptr;
-}
-
-void
 FecEncoderBase::destroy_encoder() {
     if (m_encoder) {
         destroy_bandfec_encoder(m_encoder);
@@ -88,13 +104,50 @@ FecEncoderBase::destroy_encoder() {
     }
 }
 
+bool
+FecEncoderBase::do_set_block_size(int size_in_bytes) {
+    auto alignment = 4 * kFecParamG;
+    auto aligned_size = (size_in_bytes + alignment - 1) & ~(alignment - 1);
+
+    if (aligned_size <= sizeof(FecFragmentHeader)) {
+        std::cerr << "invalid arguments" << std::endl;
+        return false;
+    }
+
+    m_config.block_size = aligned_size;
+
+    ///< std::cerr << "new block size set: " << m_config.to_string() << std::endl;
+    return true;
+}
+
+bool
+FecEncoderBase::do_set_red_params(int blocks_in_group, int red_blocks_in_group) {
+    if (blocks_in_group <= 0 || red_blocks_in_group <= 0) {
+        std::cerr << "invalid arguments" << std::endl;
+        return false;
+    }
+
+    m_config.blocks = blocks_in_group;
+    m_config.red_blocks = red_blocks_in_group;
+
+    ///< std::cerr << "new red params set: " << m_config.to_string() << std::endl;
+    return true;
+}
+
 void
 FecEncoderBase::on_new_block(uint16_t sequence, bool red, const uint8_t* data, int len) {
-    auto packet = FecPacket::create_instance(data, len, sequence, red);
+    auto header = make_fec_header(sequence, red);
+    if (!header) {
+        return;
+    }
+
+    auto packet = FecPacket::create_instance(header, data, len);
     if (!packet) {
         std::cerr << "could not create fec packet" << std::endl;
         return;
     }
+
+    destroy_fec_header(header);
 
     m_observer->on_encoder_output(this, packet);
     packet->release();

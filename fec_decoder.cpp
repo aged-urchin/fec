@@ -4,18 +4,6 @@
 
 #include <iostream>
 
-void
-on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2) {
-    auto decoder  = (FecDecoder*)user_data1;
-    auto sequence = (uint32_t)user_data2;
-
-    if (position % len) {
-        printf("error\n");
-    }
-
-    decoder->on_new_block(sequence, (int32_t)position / len, (const uint8_t*)buf, len);
-}
-
 FecDecoder::ReconstructedFrame::ReconstructedFrame(int size) {
     if (size > 0) {
         data.resize(size);
@@ -64,79 +52,19 @@ FecDecoder::ReconstructedFrame::push_fragment(int offset, const uint8_t* fragmen
 }
 
 FecDecoder::FecDecoder(IFecDecoderObserver* observer) :
-m_observer(observer) {
+FecDecoderBase(observer) {
 
 }
 
 FecDecoder::~FecDecoder() {
+    destroy_decoders();
+
     while (!m_pending_frames.empty()) {
         auto itr = m_pending_frames.begin();
         delete itr->second;
 
         m_pending_frames.erase(itr);
     }
-
-    while (!m_seq_decoders.empty()) {
-        auto itr = m_seq_decoders.begin();
-        remove_decoder(itr->first);
-    }
-}
-
-void
-FecDecoder::set_reorder_window_size(int size) {
-    m_reorder_window_size = size;
-    std::cerr << "reorder window size changed to " << m_reorder_window_size << std::endl;
-}
-
-void
-FecDecoder::decode(const uint8_t* data, int len) {
-    auto packet = FecPacket::parse_from_buffer(data, len);
-    if (!packet) {
-        return;
-    }
-
-    FecHeader header;
-    packet->get_header(header);
-
-    std::vector<uint16_t> outdated_decoders;
-    for (auto& decoder : m_seq_decoders) {
-        if (decoder.first == header.sequence_number) {
-            decoder.second->no_packets_cnt = 0;
-        } else if (++decoder.second->no_packets_cnt > m_reorder_window_size) {
-            outdated_decoders.push_back(decoder.first);
-        }
-    }
-
-    for (auto& decoder : outdated_decoders) {
-        remove_decoder(decoder);
-    }
-
-    if (0 == m_seq_decoders.count(header.sequence_number)) {
-        auto decoder = new Decoder;
-        decoder->decoder = create_bandfec_decoder(&on_fec_receive, (int64_t)this, 0);
-
-        m_seq_decoders[header.sequence_number] = decoder;
-    }
-
-    auto decoder = m_seq_decoders[header.sequence_number];
-    bandfec_decode(decoder->decoder, (void*)packet->get_payload(), packet->get_payload_size());
-
-    packet->release();
-}
-
-void
-FecDecoder::remove_decoder(uint16_t sequence) {
-    if (0 == m_seq_decoders.count(sequence)) {
-        return;
-    }
-
-    auto decoder = m_seq_decoders[sequence];
-
-    flush_bandfec_decoder(decoder->decoder);
-    destroy_bandfec_decoder(decoder->decoder);
-
-    delete decoder;
-    m_seq_decoders.erase(sequence);
 }
 
 void
@@ -177,7 +105,7 @@ FecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data, in
         remaining_len  -= header.frag_size;
 
         if (frame->ready()) {
-            m_observer->on_decoder_output(this, sequence, header.frame_number, frame->data.data(), frame->data.size());
+            send_frame(sequence, header.frame_number, frame->data.data(), frame->data.size());
 
             m_pending_frames.erase(header.frame_number);
             delete frame;
