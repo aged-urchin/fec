@@ -16,6 +16,10 @@ public:
     void decode(const uint8_t* data, int len) override;
 
 protected:
+    virtual void on_sequence_start(uint16_t sequence, const FecHeader* header, int block_size) { }
+
+    virtual void on_sequence_end(uint16_t sequence) { }
+
     virtual void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len) = 0;
 
     void send_frame(uint16_t sequence_number, uint16_t frame_number, const uint8_t* data, int data_len);

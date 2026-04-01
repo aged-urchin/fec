@@ -40,9 +40,13 @@ private:
 
     ~FecPacket() override;
 
+    int header_size(const FecHeader* header) const;
+
+    int ext_size(const FecHeader* header) const;
+
     std::vector<uint8_t> header_2_network(const FecHeader* header);
 
-    static FecHeader* header_from_network(const void* data, int len);
+    FecHeader* header_from_network(const void* data, int len);
 
 private:
 

@@ -58,9 +58,13 @@ FecDecoderBase::decode(const uint8_t* data, int len) {
         decoder->decoder = create_bandfec_decoder(&on_fec_receive, (int64_t)this, header->sequence_number);
 
         m_seq_decoders[header->sequence_number] = decoder;
+
+        BandFecHeaderType bandfec_header;
+        bandfec_parse_block((void*)packet->get_payload(), packet->get_payload_size(), bandfec_header);
+
+        on_sequence_start(header->sequence_number, header, bandfec_header.s);
     }
 
-    auto ext = (RtpFecExt*)(&header->ext);
     auto decoder = m_seq_decoders[header->sequence_number];
     bandfec_decode(decoder->decoder, (void*)packet->get_payload(), packet->get_payload_size());
 
@@ -86,6 +90,8 @@ FecDecoderBase::remove_decoder(uint16_t sequence) {
 
     delete decoder;
     m_seq_decoders.erase(sequence);
+
+    on_sequence_end(sequence);
 }
 
 void

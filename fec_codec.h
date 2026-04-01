@@ -45,11 +45,32 @@ enum FecExtType {
     kFecExtRtp  = 1,
 };
 
+enum { kRtpFecExtOneByteSizeMax = 127, kRtpFecExtTwoByteSizeMax = 32767 };
+
 /** rtp fec extension (with 'FecHeader::typ' == 1)
  */
 struct RtpFecExt {
-    uint16_t base_sequence_num{ 0 }; ///< the sequence number of the first rtp packet
-    uint16_t num_packets{ 0 };       ///< number consuccessive rtp packets
+    uint16_t  base_sequence_num{ 0 }; ///< the sequence number of the first rtp packet from a series of consecutive rtp packets
+    uint8_t   delta_size_bytes{ 0 };  ///< total bytes 'delta_size' occupies
+
+    /** delta packet size(relative to 'BandFecHeaderType::s')
+     *
+     * one byte length field(0 ~ 127):
+     *  0
+     *   0 1 2 3 4 5 6 7
+     *  +-+-+-+-+-+-+-+-+
+     *  |0| delta  size |
+     *  +-+-+-+-+-+-+-+-+
+     *
+     *  two bytes length field(128 ~ 32767):
+     *  0                   1
+     *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+     *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     *  |1|        delta  size          |
+     *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     *
+     */
+    uint8_t   delta_size[1];
 };
 
 /** rtp packet format                                                                  rtcp packet format
@@ -223,7 +244,7 @@ class IFecDecoderObserver {
 public:
     virtual ~IFecDecoderObserver() = default;
 
-    /** return one reconstructed frame (e.g. one udp packet)
+    /** return one reconstructed frame (e.g. one udp packet for 'kFecExtNull' or one rtp packet for 'kFecExtRtp')
      */
     virtual void on_decoder_output(IFecDecoder*     decoder,
                                    uint16_t         sequence_number,
@@ -245,14 +266,14 @@ public:
 
 extern FecFragmentHeader kEndingFragHeader;
 
-const int fec_header_size(const uint8_t type);
+FecHeader*
+create_fec_header(int ext_size = 0);
 
-FecHeader* create_empty_fec_header(const uint8_t type);
+void
+destroy_fec_header(FecHeader* header);
 
-void destroy_fec_header(FecHeader* header);
-
-FecHeader* duplicate_fec_header(const FecHeader* header);
-
+/** codec apis for 'kFecExtNull'
+ */
 IFecEncoder*
 create_fec_encoder(IFecEncoderObserver* observer);
 
@@ -265,6 +286,8 @@ create_fec_decoder(IFecDecoderObserver* observer);
 void
 destroy_fec_decoder(IFecDecoder* decoder);
 
+/** codec apis for 'kFecExtRtp'
+ */
 IFecEncoder*
 create_fec_encoder2(IFecEncoderObserver* observer);
 

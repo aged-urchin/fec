@@ -9,6 +9,18 @@ FecEncoderBase(observer) {
 
 }
 
+bool
+FecEncoder2::set_red_params(int blocks_in_group, int red_blocks_in_group) {
+    /** 2: kRtpFecExtTwoByteSizeMax
+     */
+    if (blocks_in_group > UINT8_MAX / 2) {
+        std::cerr << "invalid arguments, blocks(" << blocks_in_group << ") too large for 'kFecExtRtp'" << std::endl;
+        return false;
+    }
+
+    return FecEncoderBase::set_red_params(blocks_in_group, red_blocks_in_group);
+}
+
 void
 FecEncoder2::do_encode(const uint8_t* data, int data_len) {
     RtpHeader rtp_header;
@@ -17,10 +29,16 @@ FecEncoder2::do_encode(const uint8_t* data, int data_len) {
         return;
     }
 
-    ///< std::cerr << rtp_header.seq << std::endl;
+    ///< std::cerr << "encode seq: " << rtp_header.seq << ", len: " << data_len << std::endl;
     if (!m_packets.empty()) {
         if (m_ssrc != rtp_header.ssrc) {
             std::cerr << "ssrc differs, was: " << m_ssrc << ", new: " << rtp_header.ssrc << std::endl;
+            return;
+        }
+
+        if (data_len > kRtpFecExtTwoByteSizeMax) {
+            std::cerr << "invalid packet size, 'kFecExtRtp' is designed to hold packets of size smaller than 32767" << std::endl;
+            do_flush();
             return;
         }
 
@@ -75,6 +93,21 @@ FecEncoder2::encode_group() {
             break;
         }
 
+        assert(m_delta_sizes.empty());
+        for (auto& packet : m_packets) {
+            auto delta = m_active_config.block_size - packet.size();
+
+            assert(delta >= 0);
+            assert(delta <= kRtpFecExtTwoByteSizeMax);
+
+            if (delta <= kRtpFecExtOneByteSizeMax) {
+                m_delta_sizes.push_back(delta);
+            } else {
+                m_delta_sizes.push_back(((uint8_t)(delta >> 8) & 0xff) | 0x80); ///< always big-endian
+                m_delta_sizes.push_back((uint8_t)(delta & 0xff));
+            }
+        }
+
         bool done = false;
         for (auto& packet : m_packets) {
             assert(!done);
@@ -100,16 +133,16 @@ FecEncoder2::reset() {
     m_max_packet_len           = 0;
 
     m_packets.clear();
+    m_delta_sizes.clear();
 }
 
 FecHeader*
 FecEncoder2::make_fec_header(uint16_t sequence, bool red) {
-/*
     if (!red) {
-        return nullptr;
+        //return nullptr;
     }
-*/
-    auto header = create_empty_fec_header(kFecExtRtp);
+
+    auto header = create_fec_header(sizeof(RtpFecExt) + m_delta_sizes.size() - 1);
 
     header->sig = 0b11; ///< 3
     header->typ = kFecExtRtp;
@@ -122,10 +155,13 @@ FecEncoder2::make_fec_header(uint16_t sequence, bool red) {
     /** should be called within 'bandfec_encode()' (before 'reset()')
      */
     assert(!m_packets.empty());
+    assert(m_packets.size() <= UINT8_MAX);
+    assert(m_active_config.block_size > 0);
 
     auto rtp_ext = (RtpFecExt*)header->ext;
     rtp_ext->base_sequence_num = m_base_rtp_sequence_number;
-    rtp_ext->num_packets       = m_packets.size();
+    rtp_ext->delta_size_bytes  = m_delta_sizes.size();
 
+    std::memcpy(rtp_ext->delta_size, m_delta_sizes.data(), m_delta_sizes.size());
     return header;
 }

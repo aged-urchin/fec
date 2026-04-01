@@ -8,6 +8,8 @@ class FecEncoder2 : public FecEncoderBase {
 public:
     FecEncoder2(IFecEncoderObserver* observer);
 
+    bool set_red_params(int blocks_in_group, int red_blocks_in_group) override;
+
 private:
     void do_encode(const uint8_t* data, int data_len) override;
 
@@ -24,6 +26,7 @@ private:
     int                               m_max_packet_len{ 0 };
     uint16_t                          m_base_rtp_sequence_number{ 0 };
     uint32_t                          m_ssrc{ 0 };
+    std::vector<uint8_t>              m_delta_sizes;
     std::vector<std::vector<uint8_t>> m_packets;
 };
 

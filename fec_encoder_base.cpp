@@ -19,21 +19,18 @@ m_observer(observer) {
 
 FecEncoderBase::~FecEncoderBase() {
     std::lock_guard<std::mutex> lock(m_mutex);
-
     destroy_encoder();
 }
 
 bool
 FecEncoderBase::set_block_size(int size_in_bytes) {
     std::lock_guard<std::mutex> lock(m_mutex);
-
     return do_set_block_size(size_in_bytes);
 }
 
 bool
 FecEncoderBase::set_red_params(int blocks_in_group, int red_blocks_in_group) {
     std::lock_guard<std::mutex> lock(m_mutex);
-
     return do_set_red_params(blocks_in_group, red_blocks_in_group);
 }
 
@@ -106,7 +103,7 @@ FecEncoderBase::destroy_encoder() {
 
 bool
 FecEncoderBase::do_set_block_size(int size_in_bytes) {
-    auto alignment = 4 * kFecParamG;
+    auto alignment    = 4 * kFecParamG;
     auto aligned_size = (size_in_bytes + alignment - 1) & ~(alignment - 1);
 
     if (aligned_size <= sizeof(FecFragmentHeader)) {
@@ -115,7 +112,6 @@ FecEncoderBase::do_set_block_size(int size_in_bytes) {
     }
 
     m_config.block_size = aligned_size;
-
     ///< std::cerr << "new block size set: " << m_config.to_string() << std::endl;
     return true;
 }
@@ -127,7 +123,7 @@ FecEncoderBase::do_set_red_params(int blocks_in_group, int red_blocks_in_group) 
         return false;
     }
 
-    m_config.blocks = blocks_in_group;
+    m_config.blocks     = blocks_in_group;
     m_config.red_blocks = red_blocks_in_group;
 
     ///< std::cerr << "new red params set: " << m_config.to_string() << std::endl;

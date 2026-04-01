@@ -12,8 +12,8 @@ FecEncoderBase(observer) {
 void
 FecEncoder::do_encode(const uint8_t* data, int data_len) {
     FecFragmentHeader header;
-    char* src      = (char*)data;
-    int   src_size = data_len;
+    auto src      = (uint8_t*)data;
+    auto src_size = data_len;
 
     if (!data || data_len <= 0) {
         std::cerr << "invalid arguments" << std::endl;
@@ -50,7 +50,7 @@ FecEncoder::do_encode(const uint8_t* data, int data_len) {
              *   |<---------- Config.block_size ----------->|
              *
              */
-            m_block.insert(m_block.end(), (char*)&be_header, (char*)&be_header + sizeof(FecFragmentHeader));
+            m_block.insert(m_block.end(), (uint8_t*)&be_header, (uint8_t*)&be_header + sizeof(FecFragmentHeader));
             m_block.insert(m_block.end(), src, src + copy_size);
 
             src      += copy_size;
@@ -87,7 +87,7 @@ FecEncoder::do_flush() {
 
     bool done = false;
     do {
-        m_block.insert(m_block.end(), (char*)&kEndingFragHeader, (char*)&kEndingFragHeader + sizeof(FecFragmentHeader));
+        m_block.insert(m_block.end(), (uint8_t*)&kEndingFragHeader, (uint8_t*)&kEndingFragHeader + sizeof(FecFragmentHeader));
 
         bandfec_encode(m_encoder, (int32_t*)m_block.data(), done);
         m_block.clear();
@@ -96,7 +96,7 @@ FecEncoder::do_flush() {
 
 FecHeader*
 FecEncoder::make_fec_header(uint16_t sequence, bool red) {
-    FecHeader* header = new FecHeader();
+    auto header = create_fec_header();
 
     header->sig = 0b11; ///< 3
     header->typ = kFecExtNull;

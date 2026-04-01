@@ -69,8 +69,8 @@ FecDecoder::~FecDecoder() {
 
 void
 FecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data, int len) {
-    uint8_t* remaining_data = (uint8_t*)data;
-    int      remaining_len  = len;
+    auto remaining_data = (uint8_t*)data;
+    auto remaining_len  = len;
 
     /** there may be some trailing trivial bytes(with size <= sizeof(FecFragmentHeader))
      */
