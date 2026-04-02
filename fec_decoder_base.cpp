@@ -3,6 +3,7 @@
 #include "bandfec.h"
 
 #include <iostream>
+#include <cassert>
 
 void
 on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2) {

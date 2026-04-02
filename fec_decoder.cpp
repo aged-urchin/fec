@@ -1,6 +1,7 @@
 #include "fec_decoder.h"
 #include "fec_packet.h"
 #include "bandfec.h"
+#include "utils.h"
 
 #include <iostream>
 
@@ -76,9 +77,9 @@ FecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data, in
      */
     while (remaining_len > sizeof(FecFragmentHeader)) {
         auto frag_header = (FecFragmentHeader*)remaining_data;
-        auto header      = frag_header->to_host();
+        auto header      = convert_fragment_to_host(frag_header);
 
-        if (header.is_empty()) {
+        if (is_empty_fragment(&header)) {
             std::cerr << "empty fragment, skip this block" << std::endl;
             return;
         }

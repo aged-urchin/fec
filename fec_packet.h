@@ -25,9 +25,9 @@ public:
 
     const FecHeader* get_header() const override;
 
-    const void* get_buffer() const override;
+    const void* get_packet_buffer() const override;
 
-    uint32_t get_buffer_size() const override;
+    uint32_t get_packet_buffer_size() const override;
 
     const void* get_payload() const override;
 

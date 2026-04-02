@@ -85,7 +85,7 @@ private:
 #else
         if (!traffic.is_packet_lost()) {
 #endif
-            m_decoder->decode((uint8_t*)packet->get_buffer(), packet->get_buffer_size());
+            m_decoder->decode((uint8_t*)packet->get_packet_buffer(), packet->get_packet_buffer_size());
         }
     }
 

@@ -1,7 +1,8 @@
 #ifndef ___UTILS_H___
 #define ___UTILS_H___
 
-#include <cstdint>
+#include "fec_codec.h"
+
 #include <cassert>
 #include <cstring>
 
@@ -9,6 +10,8 @@
 #define UINT32_TO_BE(val)       (uint32_t)((((val) >> 24) & 0xFF) | (((val) >>  8) & 0x0000FF00) | (((val) <<  8) & 0x00FF0000) | (((val) << 24) & 0xFF000000))
 #define UINT16_FROM_BE(val)     UINT16_TO_BE(val)
 #define UINT32_FROM_BE(val)     UINT32_TO_BE(val)
+
+extern FecFragmentHeader kEndingFragHeader;
 
 struct RtpHeader {
     unsigned char      cc : 4;
@@ -43,6 +46,49 @@ parse_rtp_buffer(const uint8_t* buffer, uint16_t size, RtpHeader& hdr) {
     hdr.ssrc = UINT32_FROM_BE(hdr.ssrc);
 
     return true;
+}
+
+static bool
+is_empty_fragment(const FecFragmentHeader* header) {
+    return 0 == header->frame_number && 0 == header->frame_size && 0 == header->frag_offset && 0 == header->frag_size;
+}
+
+static FecFragmentHeader
+convert_fragment_to_network(const FecFragmentHeader* header) {
+    FecFragmentHeader network_header;
+
+    network_header.frame_number = UINT16_TO_BE(header->frame_number);
+    network_header.frame_size = UINT16_TO_BE(header->frame_size);
+    network_header.frag_offset = UINT16_TO_BE(header->frag_offset);
+    network_header.frag_size = UINT16_TO_BE(header->frag_size);
+
+    return network_header;
+}
+
+static FecFragmentHeader
+convert_fragment_to_host(const FecFragmentHeader* header) {
+    FecFragmentHeader host_header;
+
+    host_header.frame_number = UINT16_FROM_BE(header->frame_number);
+    host_header.frame_size = UINT16_FROM_BE(header->frame_size);
+    host_header.frag_offset = UINT16_FROM_BE(header->frag_offset);
+    host_header.frag_size = UINT16_FROM_BE(header->frag_size);
+
+    return host_header;
+}
+
+static FecHeader*
+create_fec_header(int ext_size = 0) {
+    auto header_size = sizeof(FecHeader) + ext_size;
+    auto ptr = new char[header_size];
+
+    memset(ptr, 0, header_size);
+    return (FecHeader*)ptr;
+}
+
+static void
+destroy_fec_header(FecHeader* header) {
+    delete[] (char*)header;
 }
 
 #endif ///< ___UTILS_H___

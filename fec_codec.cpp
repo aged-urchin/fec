@@ -2,18 +2,9 @@
 #include "fec_decoder.h"
 #include "fec_encoder2.h"
 #include "fec_decoder2.h"
+#include "utils.h"
 
 FecFragmentHeader kEndingFragHeader{ 0, 0, 0, 0 };
-
-FecHeader*
-create_fec_header(int ext_size) {
-    return (FecHeader*)new char[sizeof(FecHeader) + ext_size];
-}
-
-void
-destroy_fec_header(FecHeader* header) {
-    delete[] (char*)header;
-}
 
 IFecEncoder*
 create_fec_encoder(IFecEncoderObserver* observer) {

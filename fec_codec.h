@@ -1,42 +1,7 @@
 #ifndef ___FEC_CODEC_H___
 #define ___FEC_CODEC_H___
 
-#include "utils.h"
-
-/** protected by fec(e.g. as part of fec payload) and used to reconstruct udp packets from fec packets
- */
-struct FecFragmentHeader {
-    uint16_t    frame_number{ 0 };
-    uint16_t    frame_size{ 0 };
-    uint16_t    frag_offset{ 0 };
-    uint16_t    frag_size{ 0 };
-
-    bool is_empty() {
-        return 0 == frame_number && 0 == frame_size && 0 == frag_offset && 0 == frag_size;
-    }
-
-    FecFragmentHeader to_network() {
-        FecFragmentHeader network_header;
-
-        network_header.frame_number = UINT16_TO_BE(frame_number);
-        network_header.frame_size   = UINT16_TO_BE(frame_size);
-        network_header.frag_offset  = UINT16_TO_BE(frag_offset);
-        network_header.frag_size    = UINT16_TO_BE(frag_size);
-
-        return network_header;
-    }
-
-    FecFragmentHeader to_host() {
-        FecFragmentHeader host_header;
-
-        host_header.frame_number = UINT16_FROM_BE(frame_number);
-        host_header.frame_size   = UINT16_FROM_BE(frame_size);
-        host_header.frag_offset  = UINT16_FROM_BE(frag_offset);
-        host_header.frag_size    = UINT16_FROM_BE(frag_size);
-
-        return host_header;
-    }
-};
+#include <cstdint>
 
 /** extension type
  */
@@ -47,11 +12,21 @@ enum FecExtType {
 
 enum { kRtpFecExtOneByteSizeMax = 127, kRtpFecExtTwoByteSizeMax = 32767 };
 
+/** for 'kFecExtNull':
+ *  protected by fec(e.g. as part of fec payload) and used to reconstruct udp packets from fec packets
+ */
+struct FecFragmentHeader {
+    uint16_t    frame_number{ 0 };
+    uint16_t    frame_size{ 0 };
+    uint16_t    frag_offset{ 0 };
+    uint16_t    frag_size{ 0 };
+};
+
 /** rtp fec extension (with 'FecHeader::typ' == 1)
  */
 struct RtpFecExt {
-    uint16_t  base_sequence_num{ 0 }; ///< the sequence number of the first rtp packet from a series of consecutive rtp packets
-    uint8_t   delta_size_bytes{ 0 };  ///< total bytes 'delta_size' occupies
+    uint16_t  base_sequence_num; ///< the sequence number of the first rtp packet from a series of consecutive rtp packets
+    uint8_t   delta_size_bytes;  ///< total bytes 'delta_size' occupies (if 'FecHeader::red' is 0, this value is ignored)
 
     /** delta packet size(relative to 'BandFecHeaderType::s')
      *
@@ -166,30 +141,30 @@ struct FecHeader {
  *
  *   with 'FecHeader::typ' == 0:
  *
- *   |<--------------------------- extra header bytes (24 bytes) --------------------------->| 
- *   .______________________________________________________________________________________________________________.
- *   |                      |                              |                                 |                      |
- *   |  FecHeader(4 bytes)  | BandFecHeaderType (12 bytes) |   FecFragmentHeader (8 bytes)   |    data (n bytes)    |
- *   |                      |                              |                                 |                      |
- *   `--------------------------------------------------------------------------------------------------------------`
- *                                                                                           |<----- user data ---->|
- *                                                         |<---------------- BandFecHeaderType::s ---------------->|
- *                          |<--------------------------------- bandfec data block -------------------------------->|
- *   |<-------------------------------------------- fec packet buffer --------------------------------------------->|
+ *   |<------------------------ extra header bytes (16 + 8*N bytes) ------------------------>| 
+ *   .______________________________________________________________________________________________________________  ~~~  ________________________________________________________.
+ *   |                      |                              |                                 |                      |     |                                 |                      |
+ *   |  FecHeader(4 bytes)  | BandFecHeaderType (12 bytes) |   FecFragmentHeader0 (8 bytes)  |    data0 (n bytes)   |     |   FecFragmentHeaderN (8 bytes)  |    dataN (n bytes)   |
+ *   |                      |                              |                                 |                      |     |                                 |                      |
+ *   `--------------------------------------------------------------------------------------------------------------  ~~~  --------------------------------------------------------`
+ *                                                                                           |<-- protected data -->|                                       |<-- protected data -->|
+ *                                                         |<-----------------------------------------------  BandFecHeaderType::s ----------------------------------------------->|
+ *                          |<----------------------------------------------------------- payload (bandfec data block) ----------------------------------------------------------->|
+ *   |<------------------------------------------------------------------------------ packet buffer ------------------------------------------------------------------------------>|
  *
  *
  *   with 'FecHeader::typ' == 1:
  *
- *   |<---------- extra header bytes (20 bytes)----------->| 
+ *   |<-------- extra header bytes (12 + N bytes)--------->| 
  *   .______________________________________________________________________________________________________________.
  *   |                      |                              |                                                        |
- *   |  FecHeader(8 bytes)  | BandFecHeaderType (12 bytes) |                    data (n bytes)                      |
+ *   |  FecHeader(N bytes)  | BandFecHeaderType (12 bytes) |                    data (n bytes)                      |
  *   |                      |                              |                                                        |
  *   `--------------------------------------------------------------------------------------------------------------`
- *                                                         |<--------------------- user data ---------------------->|
+ *                                                         |<------------------ protected data -------------------->|
  *                                                         |<------------------- HeaderType::s -------------------->|
- *                          |<--------------------------------- bandfec data block -------------------------------->|
- *   |<-------------------------------------------- fec packet buffer --------------------------------------------->|
+ *                          |<---------------------------- payload (bandfec data block) --------------------------->|
+ *   |<---------------------------------------------- packet buffer ----------------------------------------------->|
  *
  */
 class IFecPacket {
@@ -200,13 +175,14 @@ public:
 
     virtual const FecHeader* get_header() const = 0;
 
-    /** get header buffer and data buffer as a whole(e.g. FecHeader + HeaderType + FecFragmentHeader + user data)
+    /** get header buffer and data buffer as a whole(e.g. FecHeader + BandFecHeaderType + FecFragmentHeader + protected data),
+     *  with corresponding header fields transformed into network byte order(aka. big-endian)
      */
-    virtual const void* get_buffer() const = 0;
+    virtual const void* get_packet_buffer() const = 0;
 
-    virtual uint32_t get_buffer_size() const = 0;
+    virtual uint32_t get_packet_buffer_size() const = 0;
 
-    /** get fec block buffer(e.g. HeaderType + FecFragmentHeader + user data)
+    /** get fec block buffer(e.g. BandFecHeaderType + FecFragmentHeader + protected data)
      */
     virtual const void* get_payload() const = 0;
 
@@ -263,14 +239,6 @@ public:
      */
     virtual void decode(const uint8_t* data, int len) = 0;
 };
-
-extern FecFragmentHeader kEndingFragHeader;
-
-FecHeader*
-create_fec_header(int ext_size = 0);
-
-void
-destroy_fec_header(FecHeader* header);
 
 /** codec apis for 'kFecExtNull'
  */

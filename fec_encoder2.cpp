@@ -1,5 +1,6 @@
 #include "fec_encoder2.h"
 #include "bandfec.h"
+#include "utils.h"
 
 #include <iostream>
 #include <cassert>

@@ -1,5 +1,8 @@
 #include "fec_packet.h"
+#include "utils.h"
+
 #include <iostream>
+#include <cassert>
 
 FecPacket*
 FecPacket::create_instance(const FecHeader* header, const uint8_t* data, int len) {
@@ -71,12 +74,12 @@ FecPacket::get_header() const {
 }
 
 const void*
-FecPacket::get_buffer() const {
+FecPacket::get_packet_buffer() const {
     return m_data.data();
 }
 
 uint32_t
-FecPacket::get_buffer_size() const {
+FecPacket::get_packet_buffer_size() const {
     return m_data.size();
 }
 

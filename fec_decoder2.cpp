@@ -1,5 +1,8 @@
 #include "fec_decoder2.h"
+#include "utils.h"
+
 #include <iostream>
+#include <cassert>
 
 FecDecoder2::FecDecoder2(IFecDecoderObserver* observer) :
 FecDecoderBase(observer) {

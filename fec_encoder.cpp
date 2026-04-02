@@ -1,5 +1,6 @@
 #include "fec_encoder.h"
 #include "bandfec.h"
+#include "utils.h"
 
 #include <iostream>
 #include <cassert>
@@ -41,7 +42,7 @@ FecEncoder::do_encode(const uint8_t* data, int data_len) {
             header.frag_offset += header.frag_size;
             header.frag_size    = copy_size;
 
-            auto be_header = header.to_network();
+            auto be_header = convert_fragment_to_network(&header);
             /**  .__________________________________________.
              *   |                           |              |
              *   |     FecFragmentHeader     |     data     |
