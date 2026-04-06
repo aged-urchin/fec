@@ -4,7 +4,9 @@
 #include "fec_codec.h"
 #include <map>
 
+struct BandFecHeaderType;
 struct BandFecDecoder;
+
 class FecDecoderBase : public IFecDecoder {
 public:
     FecDecoderBase(IFecDecoderObserver* observer);
@@ -16,11 +18,15 @@ public:
     void decode(const uint8_t* data, int len) override;
 
 protected:
-    virtual void on_sequence_start(uint16_t sequence, const FecHeader* header, int block_size) { }
+    virtual void on_sequence_start(uint16_t sequence, const FecHeader* header, const BandFecHeaderType* bandfec_header) { }
 
     virtual void on_sequence_end(uint16_t sequence) { }
 
     virtual void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len) = 0;
+
+    void maybe_remove_outdated_decoders(int32_t reset_sequence_number = -1);
+
+    void decode_fec_block(uint16_t sequence_number, const void* data, int len);
 
     void send_frame(uint16_t sequence_number, uint16_t frame_number, const uint8_t* data, int data_len);
 

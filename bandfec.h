@@ -13,7 +13,7 @@ struct BandFecHeaderType {
     uint8_t     w;
     uint8_t     g;
 
-    uint32_t    i;
+    uint32_t    i; ///< 0,...
 };
 
 struct BandFecEncDec {

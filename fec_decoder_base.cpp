@@ -11,7 +11,7 @@ on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t 
     auto sequence = (uint32_t)user_data2;
 
     if (position % len) {
-        printf("error\n");
+        std::cerr << "invalid position " << position << ", block size is " << len << std::endl;
     }
 
     decoder->on_new_block(sequence, (int32_t)position / len, (const uint8_t*)buf, len);
@@ -40,19 +40,7 @@ FecDecoderBase::decode(const uint8_t* data, int len) {
     }
 
     auto header = packet->get_header();
-
-    std::vector<uint16_t> outdated_decoders;
-    for (auto& decoder : m_seq_decoders) {
-        if (decoder.first == header->sequence_number) {
-            decoder.second->no_packets_cnt = 0;
-        } else if (++decoder.second->no_packets_cnt > m_reorder_window_size) {
-            outdated_decoders.push_back(decoder.first);
-        }
-    }
-
-    for (auto& decoder : outdated_decoders) {
-        remove_decoder(decoder);
-    }
+    maybe_remove_outdated_decoders(header->sequence_number);
 
     if (0 == m_seq_decoders.count(header->sequence_number)) {
         auto decoder = new Decoder;
@@ -63,13 +51,35 @@ FecDecoderBase::decode(const uint8_t* data, int len) {
         BandFecHeaderType bandfec_header;
         bandfec_parse_block((void*)packet->get_payload(), packet->get_payload_size(), bandfec_header);
 
-        on_sequence_start(header->sequence_number, header, bandfec_header.s);
+        on_sequence_start(header->sequence_number, header, &bandfec_header);
     }
 
-    auto decoder = m_seq_decoders[header->sequence_number];
-    bandfec_decode(decoder->decoder, (void*)packet->get_payload(), packet->get_payload_size());
-
+    decode_fec_block(header->sequence_number, packet->get_payload(), packet->get_payload_size());
     packet->release();
+}
+
+void
+FecDecoderBase::maybe_remove_outdated_decoders(int32_t reset_sequence_number) {
+    std::vector<uint16_t> outdated_decoders;
+    for (auto& decoder : m_seq_decoders) {
+        if ((int32_t)decoder.first == reset_sequence_number) {
+            decoder.second->no_packets_cnt = 0;
+        } else if (++decoder.second->no_packets_cnt > m_reorder_window_size) {
+            outdated_decoders.push_back(decoder.first);
+        }
+    }
+
+    for (auto& decoder : outdated_decoders) {
+        remove_decoder(decoder);
+    }
+}
+
+void
+FecDecoderBase::decode_fec_block(uint16_t sequence_number, const void* data, int len) {
+    auto decoder = m_seq_decoders[sequence_number];
+    /** sequential delivery is unnecessary(the decoder accepts out-of-order packets)
+     */
+    bandfec_decode(decoder->decoder, (void*)data, len);
 }
 
 void

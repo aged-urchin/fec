@@ -42,7 +42,7 @@ FecPacket::is_fec_packet(const void* data, int len) {
     }
 
     if (1 == type && !red) {
-        //return false;
+        return false;
     }
 
     return true;

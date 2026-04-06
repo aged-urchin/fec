@@ -26,7 +26,7 @@ struct FecFragmentHeader {
  */
 struct RtpFecExt {
     uint16_t  base_sequence_num; ///< the sequence number of the first rtp packet from a series of consecutive rtp packets
-    uint8_t   delta_size_bytes;  ///< total bytes 'delta_size' occupies (if 'FecHeader::red' is 0, this value is ignored)
+    uint8_t   delta_size_bytes;  ///< total bytes 'delta_size' occupies
 
     /** delta packet size(relative to 'BandFecHeaderType::s')
      *
@@ -208,7 +208,7 @@ public:
 
     virtual bool set_red_params(int blocks_in_group, int red_blocks_in_group) = 0;
 
-    /** encode one frame (e.g. one udp packet)
+    /** encode one frame (e.g. one udp/rtp packet)
      */
     virtual void encode(const uint8_t* data, int data_len) = 0;
 

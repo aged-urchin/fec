@@ -3,6 +3,7 @@
 
 #include "./network_conditioner.h"
 #include "../fec_codec.h"
+#include "../utils.h"
 
 #include <iostream>
 #include <map>
@@ -13,31 +14,16 @@
 
 namespace TEST2 {
 
-#define USE_RANDOM_FILE2 false
 RandomLossTool traffic(LossRateType::LOSS_30_PERCENT);
 
 const int kFecParamN = 10;
 const int kFecParamK = 12;
-
-FILE* random_in = nullptr, * recv_block = nullptr;
-std::vector<int32_t> random_numbers_in;
 
 class Foo : public IFecEncoderObserver,
             public IFecDecoderObserver {
 public:
     void start(const char* name) {
         m_out_file = fopen(name, "wb");
-
-        random_in = fopen("./test/random_in.txt", "w");
-        recv_block = fopen("./test/recv_block.txt", "w");
-#if USE_RANDOM_FILE2
-        std::ifstream file("./read_random.txt");
-        std::string line;
-
-        while (std::getline(file, line)) {
-            random_numbers_in.push_back(std::stoi(line));
-        }
-#endif
 
         m_encoder = create_fec_encoder2(this);
         m_decoder = create_fec_decoder2(this);
@@ -55,7 +41,7 @@ public:
 
         destroy_fec_decoder(m_decoder);
         m_decoder = nullptr;
-
+#if 0
         int constructed_frames = 0;
         for (auto& sequence_frames : m_frames) {
             for (auto& frame : sequence_frames.second.frames) {
@@ -64,10 +50,16 @@ public:
             }
         }
         fclose(m_out_file);
-        std::cerr << "frame lossrate: " << (m_encoded_frames - constructed_frames) * 100.0 / m_encoded_frames << "%" << std::endl;
+#endif
+        std::cerr << "frame lossrate before fec: " << m_total_losts * 100.0 / m_total_packets << "%" << std::endl;
+        std::cerr << "rtp packets lossrate before fec: " << m_lost_rtp_packets * 100.0 / m_total_rtp_packets << "%" << std::endl;
+        std::cerr << "rtp packets lossrate after fec: " << (m_lost_rtp_packets - m_recovered_rtp_packets) * 100.0 / m_lost_rtp_packets << "%" << std::endl;
     }
 
     void push_data(const std::vector<uint8_t>& data) {
+        decode(data.data(), data.size(), true);
+        ++m_total_rtp_packets;
+
         m_encoder->encode(data.data(), data.size());
         ++m_encoded_frames;
     }
@@ -77,20 +69,45 @@ public:
     }
 
 private:
-    void on_encoder_output(IFecEncoder* encoder, IFecPacket* packet) override {
-        static int out_packets = 0;
-        ++out_packets;
-#if USE_RANDOM_FILE2
-        if (random_numbers_in.end() != std::find(random_numbers_in.begin(), random_numbers_in.end(), out_packets)) {
-#else
+    void decode(const uint8_t* data, int len, bool rtp) {
+        ++m_total_packets;
+
         if (!traffic.is_packet_lost()) {
-#endif
-            m_decoder->decode((uint8_t*)packet->get_packet_buffer(), packet->get_packet_buffer_size());
+            m_decoder->decode(data, len);
+        } else {
+            ++m_total_losts;
+
+            if (rtp) {
+                RtpHeader rtp_header;
+                if (!parse_rtp_buffer(data, len, rtp_header)) {
+                    std::cerr << "input an invalid rtp packet" << std::endl;
+                    return;
+                }
+
+                ++m_lost_rtp_packets;
+                std::cerr << "rtp lost seq: " << rtp_header.seq << std::endl;
+            }
         }
     }
 
-    void on_decoder_output(IFecDecoder * decoder, uint16_t sequence_number, uint16_t frame_number, const uint8_t * data, int len) override {
+    void on_encoder_output(IFecEncoder* encoder, IFecPacket* packet) override {
+        auto header = packet->get_header();
+        assert(header->red);
+
+        decode((uint8_t*)packet->get_packet_buffer(), packet->get_packet_buffer_size(), false);
+    }
+
+    void on_decoder_output(IFecDecoder* decoder, uint16_t sequence_number, uint16_t frame_number, const uint8_t* data, int len) override {
         m_frames[sequence_number].frames[frame_number] = { data, data + len };
+
+        RtpHeader rtp_header;
+        if (!parse_rtp_buffer(data, len, rtp_header)) {
+            std::cerr << "output an invalid rtp packet" << std::endl;
+            return;
+        }
+
+        ++m_recovered_rtp_packets;
+        std::cerr << "rtp recovered seq: " << rtp_header.seq << std::endl;
     }
 
 private:
@@ -106,6 +123,13 @@ private:
     uint16_t                                m_next_frame{ 0 };
     std::map<uint16_t, SequenceData>        m_frames;
     int                                     m_encoded_frames{ 0 };
+
+    int                                     m_total_packets{ 0 };
+    int                                     m_total_losts{ 0 };
+
+    int                                     m_total_rtp_packets{ 0 };
+    int                                     m_lost_rtp_packets{ 0 };
+    int                                     m_recovered_rtp_packets{ 0 };
 };
 
 void test() {

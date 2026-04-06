@@ -140,7 +140,7 @@ FecEncoder2::reset() {
 FecHeader*
 FecEncoder2::make_fec_header(uint16_t sequence, bool red) {
     if (!red) {
-        //return nullptr;
+        return nullptr;
     }
 
     auto header = create_fec_header(sizeof(RtpFecExt) + m_delta_sizes.size() - 1);
