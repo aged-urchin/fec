@@ -33,7 +33,7 @@ private:
 
 public:
     RandomLossTool(LossRateType target_loss) : dist(0.0, 1.0) {
-        unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
+        auto seed = (uint32_t)std::chrono::system_clock::now().time_since_epoch().count();
         engine.seed(seed);
         set_loss_rate(target_loss);
     }
@@ -91,7 +91,7 @@ private:
 
 public:
     GilbertElliottLossTool(LossRateType target_loss) : dist(0.0, 1.0) {
-        unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
+        auto seed = (uint32_t)std::chrono::system_clock::now().time_since_epoch().count();
         engine.seed(seed);
         load_params(target_loss);
     }

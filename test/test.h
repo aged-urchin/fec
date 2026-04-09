@@ -70,7 +70,7 @@ public:
     }
 
     void push_data(const std::vector<uint8_t>& data) {
-        m_encoder->encode(data.data(), data.size());
+        m_encoder->encode(data.data(), (int)data.size());
         ++m_encoded_frames;
     }
 

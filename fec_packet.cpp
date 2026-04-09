@@ -22,7 +22,7 @@ FecPacket::parse_from_buffer(const void* data, int len) {
 bool
 FecPacket::is_fec_packet(const void* data, int len) {
     auto buf = (const uint8_t*)data;
-    if (!data || len <= sizeof(FecHeader)) {
+    if (!data || len <= (int)sizeof(FecHeader)) {
         return false;
     }
 
@@ -80,7 +80,7 @@ FecPacket::get_packet_buffer() const {
 
 uint32_t
 FecPacket::get_packet_buffer_size() const {
-    return m_data.size();
+    return (uint32_t)m_data.size();
 }
 
 const void*
@@ -90,7 +90,7 @@ FecPacket::get_payload() const {
 
 uint32_t
 FecPacket::get_payload_size() const {
-    return m_data.size() - header_size(m_header);
+    return (uint32_t)m_data.size() - (uint32_t)header_size(m_header);
 }
 
 std::vector<uint8_t>

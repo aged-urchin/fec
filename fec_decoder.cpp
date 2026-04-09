@@ -18,7 +18,7 @@ FecDecoder::ReconstructedFrame::ready() {
         total_written += slot.second;
     }
 
-    return !data.empty() && total_written == data.size();
+    return !data.empty() && total_written == (int)data.size();
 }
 
 bool
@@ -28,7 +28,7 @@ FecDecoder::ReconstructedFrame::push_fragment(int offset, const uint8_t* fragmen
         return false;
     }
 
-    if (offset < 0 || size <= 0 || !fragment_data || offset + size > data.size()) {
+    if (offset < 0 || size <= 0 || !fragment_data || offset + size > (int)data.size()) {
         std::cerr << "invalid arguments" << std::endl;
         return false;
     }
@@ -75,7 +75,7 @@ FecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data, in
 
     /** there may be some trailing trivial bytes(with size <= sizeof(FecFragmentHeader))
      */
-    while (remaining_len > sizeof(FecFragmentHeader)) {
+    while (remaining_len > (int)sizeof(FecFragmentHeader)) {
         auto frag_header = (FecFragmentHeader*)remaining_data;
         auto header      = convert_fragment_to_host(frag_header);
 
@@ -106,7 +106,7 @@ FecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data, in
         remaining_len  -= header.frag_size;
 
         if (frame->ready()) {
-            send_frame(sequence, header.frame_number, frame->data.data(), frame->data.size());
+            send_frame(sequence, header.frame_number, frame->data.data(), (int)frame->data.size());
 
             m_pending_frames.erase(header.frame_number);
             delete frame;

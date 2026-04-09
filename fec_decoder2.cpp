@@ -123,6 +123,8 @@ FecDecoder2::maybe_decode_rtp_packet(uint16_t rtp_sequence, const uint8_t* rtp_p
 
     group->available_rtp_packets.push_back(rtp_sequence);
     decode_rtp(rtp_sequence, group, rtp_packet_data, rtp_packet_len);
+
+    return true;
 }
 
 void
@@ -153,7 +155,7 @@ FecDecoder2::decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, const 
      */
     fec_block.resize(sizeof(BandFecHeaderType) + fec_group->bandfec_header->s);
 
-    decode_fec_block(fec_group->sequence, fec_block.data(), fec_block.size());
+    decode_fec_block(fec_group->sequence, fec_block.data(), (int)fec_block.size());
 }
 
 void
@@ -167,7 +169,7 @@ FecDecoder2::on_sequence_start(uint16_t sequence, const FecHeader* header, const
      */
     assert(1 == header->red);
     assert(bandfec_header->i >= bandfec_header->n);
-    assert(bandfec_header->i < bandfec_header->n + bandfec_header->k);
+    assert(bandfec_header->i < (uint32_t)(bandfec_header->n + bandfec_header->k));
     
     auto rtp_ext = (RtpFecExt*)header->ext;
     m_fec_groups[sequence] = new FecGroup(sequence, bandfec_header, rtp_ext);
@@ -176,7 +178,7 @@ FecDecoder2::on_sequence_start(uint16_t sequence, const FecHeader* header, const
      */
     for (auto itr = m_rtp_packets.begin(); itr != m_rtp_packets.end(); ) {
         auto rtp_packet = *itr;
-        if (maybe_decode_rtp_packet(rtp_packet.first, rtp_packet.second.data(), rtp_packet.second.size())) {
+        if (maybe_decode_rtp_packet(rtp_packet.first, rtp_packet.second.data(), (int)rtp_packet.second.size())) {
             itr = m_rtp_packets.erase(itr);
         } else {
             ++itr;
@@ -242,6 +244,4 @@ FecDecoder2::on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* 
      */
     auto rtp_packet_size = m_fec_groups[sequence_number]->rtp_packet_sizes[rtp_header.seq];
     send_frame(sequence_number, rtp_header.seq, data, rtp_packet_size);
-
-    ///< std::cerr << "decode seq: " << rtp_header.seq << ", len: " << rtp_packet_size << std::endl;
 }

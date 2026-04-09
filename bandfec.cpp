@@ -25,10 +25,10 @@ MAC(int multiplier, int32_t* source, int32_t* dest, int g, int s) {
     /** multiply with scalar and then accumulate
      */
     int i, j, k, l;
-    for (j = 0; j < s / sizeof (*source); j += s / g / sizeof (*source)) {
-        for (k = multiplier, l = 0; k; k >>= 1, l += s / g / sizeof (*source)) {
+    for (j = 0; j < s / (int)sizeof (*source); j += s / g / (int)sizeof (*source)) {
+        for (k = multiplier, l = 0; k; k >>= 1, l += s / g / (int)sizeof (*source)) {
             if (k & 1) {
-                for (i = 0; i < s / g / sizeof (*source); ++i) {
+                for (i = 0; i < s / g / (int)sizeof (*source); ++i) {
                     dest[l + i] ^= source[j + i];
                 }
             }
@@ -366,8 +366,8 @@ flush_bandfec_decoder(BandFecDecoder* f) {
 
     /** work out the Galois field
      */
-    GFexp = (int*)malloc(sizeof(*GFexp) * ((2 << f->e->g) - 2));
-    GFlog = (int*)malloc(sizeof(*GFlog) * (1 << f->e->g));
+    GFexp = (int*)malloc(sizeof(*GFexp) * (2i64 << f->e->g) - 2);
+    GFlog = (int*)malloc(sizeof(*GFlog) * (1i64 << f->e->g));
 
     for (i = 0, tmp = 1; i < (2 << f->e->g) - 2; i++) {
         GFexp[i] = tmp;

@@ -60,7 +60,7 @@ FecEncoder2::do_encode(const uint8_t* data, int data_len) {
     }
 
     assert(!m_encoder);
-    if (m_packets.size() == m_config.blocks) {
+    if ((int)m_packets.size() == m_config.blocks) {
         encode_group();
     }
 }
@@ -74,7 +74,7 @@ FecEncoder2::do_flush() {
 
     /** since we do not allow more encodes after flush, it is safe to modify the red params
      */
-    do_set_red_params(m_packets.size(), (int)(m_config.red_blocks * 1.0 / m_config.blocks * m_packets.size()));
+    do_set_red_params((int)m_packets.size(), (int)(m_config.red_blocks * 1.0 / m_config.blocks * m_packets.size()));
 
     encode_group();
 }
@@ -96,13 +96,13 @@ FecEncoder2::encode_group() {
 
         assert(m_delta_sizes.empty());
         for (auto& packet : m_packets) {
-            auto delta = m_active_config.block_size - packet.size();
+            auto delta = m_active_config.block_size - (int)packet.size();
 
             assert(delta >= 0);
             assert(delta <= kRtpFecExtTwoByteSizeMax);
 
             if (delta <= kRtpFecExtOneByteSizeMax) {
-                m_delta_sizes.push_back(delta);
+                m_delta_sizes.push_back((uint8_t)delta);
             } else {
                 m_delta_sizes.push_back(((uint8_t)(delta >> 8) & 0xff) | 0x80); ///< always big-endian
                 m_delta_sizes.push_back((uint8_t)(delta & 0xff));
@@ -112,7 +112,7 @@ FecEncoder2::encode_group() {
         bool done = false;
         for (auto& packet : m_packets) {
             assert(!done);
-            assert(packet.size() <= m_active_config.block_size);
+            assert((int)packet.size() <= m_active_config.block_size);
 
             packet.resize(m_active_config.block_size);
             bandfec_encode(m_encoder, (int32_t*)packet.data(), done);
@@ -143,7 +143,7 @@ FecEncoder2::make_fec_header(uint16_t sequence, bool red) {
         return nullptr;
     }
 
-    auto header = create_fec_header(sizeof(RtpFecExt) + m_delta_sizes.size() - 1);
+    auto header = create_fec_header((int)(sizeof(RtpFecExt) + m_delta_sizes.size() - 1));
 
     header->sig = 0b11; ///< 3
     header->typ = kFecExtRtp;
@@ -161,7 +161,7 @@ FecEncoder2::make_fec_header(uint16_t sequence, bool red) {
 
     auto rtp_ext = (RtpFecExt*)header->ext;
     rtp_ext->base_sequence_num = m_base_rtp_sequence_number;
-    rtp_ext->delta_size_bytes  = m_delta_sizes.size();
+    rtp_ext->delta_size_bytes  = (uint8_t)m_delta_sizes.size();
 
     std::memcpy(rtp_ext->delta_size, m_delta_sizes.data(), m_delta_sizes.size());
     return header;

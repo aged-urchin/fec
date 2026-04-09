@@ -117,6 +117,10 @@ struct RtpFecExt {
  *  }
  *
  */
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4200)
+#endif
 struct FecHeader {
     /** FEC:      11
      *  STUN:     00
@@ -133,9 +137,13 @@ struct FecHeader {
 
     /** variable-length extension field for additional FEC header information
      *  only valid and contains data when header type (typ) is non-zero
+     *  [C4200]
      */
     char        ext[0];
 };
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 /**  fec packet memory layout
  *

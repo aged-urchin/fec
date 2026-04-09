@@ -51,16 +51,18 @@ public:
         }
         fclose(m_out_file);
 #endif
+        std::cerr << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
         std::cerr << "frame lossrate before fec: " << m_total_losts * 100.0 / m_total_packets << "%" << std::endl;
+        std::cerr << "red packets lossrate: " << m_lost_red_packetes * 100.0 / m_total_red_packets << "%" << std::endl;
         std::cerr << "rtp packets lossrate before fec: " << m_lost_rtp_packets * 100.0 / m_total_rtp_packets << "%" << std::endl;
         std::cerr << "rtp packets lossrate after fec: " << (m_lost_rtp_packets - m_recovered_rtp_packets) * 100.0 / m_lost_rtp_packets << "%" << std::endl;
     }
 
     void push_data(const std::vector<uint8_t>& data) {
-        decode(data.data(), data.size(), true);
+        decode(data.data(), (int)data.size(), true);
         ++m_total_rtp_packets;
 
-        m_encoder->encode(data.data(), data.size());
+        m_encoder->encode(data.data(), (int)data.size());
         ++m_encoded_frames;
     }
 
@@ -86,6 +88,8 @@ private:
 
                 ++m_lost_rtp_packets;
                 std::cerr << "rtp lost seq: " << rtp_header.seq << std::endl;
+            } else {
+                ++m_lost_red_packetes;
             }
         }
     }
@@ -94,6 +98,7 @@ private:
         auto header = packet->get_header();
         assert(header->red);
 
+        ++m_total_red_packets;
         decode((uint8_t*)packet->get_packet_buffer(), packet->get_packet_buffer_size(), false);
     }
 
@@ -126,6 +131,9 @@ private:
 
     int                                     m_total_packets{ 0 };
     int                                     m_total_losts{ 0 };
+
+    int                                     m_total_red_packets{ 0 };
+    int                                     m_lost_red_packetes{ 0 };
 
     int                                     m_total_rtp_packets{ 0 };
     int                                     m_lost_rtp_packets{ 0 };

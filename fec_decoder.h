@@ -11,7 +11,7 @@ public:
     ~FecDecoder() override;
 
 private:
-    void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len);
+    void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len) override;
 
 private:
     struct ReconstructedFrame {

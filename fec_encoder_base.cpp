@@ -10,7 +10,7 @@ on_fec_send(BandFecEncoder* f, void* buf, size_t size, bool red, int64_t user_da
     auto encoder  = (FecEncoderBase*)user_data1;
     auto sequence = (uint16_t)user_data2;
 
-    encoder->on_new_block(sequence, red, (uint8_t*)buf, size);
+    encoder->on_new_block(sequence, red, (uint8_t*)buf, (int)size);
 }
 
 FecEncoderBase::FecEncoderBase(IFecEncoderObserver* observer) :
@@ -107,7 +107,7 @@ FecEncoderBase::do_set_block_size(int size_in_bytes) {
     auto alignment    = 4 * kFecParamG;
     auto aligned_size = (size_in_bytes + alignment - 1) & ~(alignment - 1);
 
-    if (aligned_size <= sizeof(FecFragmentHeader)) {
+    if (aligned_size <= (int)sizeof(FecFragmentHeader)) {
         std::cerr << "invalid arguments" << std::endl;
         return false;
     }
