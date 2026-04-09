@@ -48,17 +48,14 @@ static mach_timebase_info_data_t        g_s_timebaseInfo  = { 0, 0 };
 #endif
 static std::mutex                       g_timeutil_mutex;
 
-class Time
-{
+class Time {
 public:
-    static void sleep(uint32_t milliseconds)
-    {
+    static void sleep(uint32_t milliseconds) {
         /** under ideal conditions is accurate to one microsecond. To get nanosecond
          *  accuracy, replace sleep()/usleep() with something with higher resolution
          *  like nanosleep() or ppoll().
          */
-        if (0 == milliseconds)
-        {
+        if (0 == milliseconds) {
 #if defined(_WIN32)
             ::Sleep(0);
 #else
@@ -67,10 +64,8 @@ public:
             return;
         }
 
-        if ((uint32_t)-1 == milliseconds)
-        {
-            while (true)
-            {
+        if ((uint32_t)-1 == milliseconds) {
+            while (true) {
 #if defined(_WIN32)
                 ::Sleep(-1);
 #else
@@ -81,15 +76,13 @@ public:
 
         const int64_t te = tickcount() + milliseconds;
 
-        while (true)
-        {
+        while (true) {
 #if defined(_WIN32)
             ::Sleep(1);
 #else
             usleep(500);
 #endif
-            if (tickcount() >= te)
-            {
+            if (tickcount() >= te) {
                 break;
             }
         }
@@ -99,14 +92,11 @@ public:
      *  Monotonic time is useful for measuring elapsed times,
      *  because it guarantees that those measurements are not affected by changes to the system clock.
      */
-    static int64_t tickcount()
-    {
+    static int64_t tickcount() {
 #if defined(_WIN32)
-        if (!g_s_tlsFlag)
-        {
+        if (!g_s_tlsFlag) {
             g_timeutil_mutex.lock();
-            if (!g_s_tlsFlag) /* double check */
-            {
+            if (!g_s_tlsFlag) {/* double check */
                 g_s_tlsKey0    = ::TlsAlloc(); /* dynamic TLS */
                 g_s_tlsKey1    = ::TlsAlloc(); /* dynamic TLS */
                 g_s_globalTick = ::timeGetTime();
@@ -120,8 +110,7 @@ public:
 
         uint32_t tick0 = (uint32_t)(uint64_t)::TlsGetValue(g_s_tlsKey0);
         uint32_t tick1 = (uint32_t)(uint64_t)::TlsGetValue(g_s_tlsKey1);
-        if (tick0 == 0 && tick1 == 0)
-        {
+        if (tick0 == 0 && tick1 == 0) {
             g_timeutil_mutex.lock();
             tick0 = (uint32_t)g_s_globalTick;
             tick1 = (uint32_t)(g_s_globalTick >> 32);
@@ -134,33 +123,27 @@ public:
         }
 
         const uint32_t tick = ::timeGetTime();
-        if (tick > tick0)
-        {
+        if (tick > tick0) {
             tick0 = tick;
             ::TlsSetValue(g_s_tlsKey0, (void*)(uint64_t)tick0);
-        }
-        else if (tick < tick0)
-        {
+        } else if (tick < tick0) {
             tick0 = tick;
             ++tick1;
             ::TlsSetValue(g_s_tlsKey0, (void*)(uint64_t)tick0);
             ::TlsSetValue(g_s_tlsKey1, (void*)(uint64_t)tick1);
 
             updateGlobalTick = true;
-        }
-        else
-        {
+        } else {
+
         }
 
         int64_t ret = tick1;
         ret <<= 32;
         ret |=  tick0;
 
-        if (updateGlobalTick)
-        {
+        if (updateGlobalTick) {
             g_timeutil_mutex.lock();
-            if (ret > g_s_globalTick)
-            {
+            if (ret > g_s_globalTick) {
                 g_s_globalTick = ret;
             }
             g_timeutil_mutex.unlock();
@@ -201,8 +184,7 @@ public:
 #endif
     }
 
-    static int64_t clocktime()
-    {
+    static int64_t clocktime() {
         /** milliseconds of calendar time elapsed since the POSIX epoch (1/1/1970 00:00:00 UTC)
          */
         UTCTime time = get_utc_time();
@@ -212,8 +194,7 @@ public:
         return (int64_t)time.tv_sec * kMilliSecondsPerSecond + NANO2MILLI(time.tv_nsec);
     }
 
-    static std::string clocktime_s()
-    {
+    static std::string clocktime_s() {
         /** return the formatted UTC time string
          *  !!! for display, use a more readable wallclock time.
          *      (this time could be changed by NTP or user)
@@ -238,8 +219,7 @@ public:
     /** time since 1/1/1900 00:00:00 UTC expressed in
      *  32bit MSB(in seconds) + 32bit LSB(in 232 picoseconds)
      */
-    static uint64_t ntp_from_utc(int64_t utc_ms)
-    {
+    static uint64_t ntp_from_utc(int64_t utc_ms) {
         UTCTime time = { static_cast<time_t>(utc_ms / kMilliSecondsPerSecond), static_cast<long>(utc_ms % kMilliSecondsPerSecond * kMicroSecondsPerSecond) };
 
         /** convert nanoseconds to 32-bits fraction (232 picoseconds units, that is (1e12 / (1 + UINT_MAX)))
@@ -261,26 +241,22 @@ public:
         return t;
     }
 
-    static int64_t ntp_ms_to_utc_ms(int64_t ntp_ms)
-    {
+    static int64_t ntp_ms_to_utc_ms(int64_t ntp_ms) {
         return ntp_ms - kNtpUtcDiffSecs * kMilliSecondsPerSecond;
     }
 
-    static int64_t utc_ms_to_ntp_ms(int64_t utc_ms)
-    {
+    static int64_t utc_ms_to_ntp_ms(int64_t utc_ms) {
         return utc_ms + kNtpUtcDiffSecs * kMilliSecondsPerSecond;
     }
 
 private:
 
-    struct UTCTime
-    {
+    struct UTCTime {
         time_t  tv_sec;     /** seconds  **/
         long    tv_nsec;    /** and the fraction(in nanoseconds (1e-9) (1000 * microseconds (1e-6))) **/
     };
 
-    static UTCTime get_utc_time()
-    {
+    static UTCTime get_utc_time() {
         /** get time expressed as the amount of time since the POSIX Epoch (1/1/1970 00:00:00 UTC)
          */
         struct UTCTime time = { 0, 0 };

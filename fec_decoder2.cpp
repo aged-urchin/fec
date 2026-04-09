@@ -1,7 +1,7 @@
 #include "fec_decoder2.h"
 #include "bandfec.h"
-#include "utils.h"
-#include "timeutils.h"
+#include "./utils/utils.h"
+#include "./utils/timeutils.h"
 
 #include <iostream>
 #include <cassert>
@@ -52,7 +52,8 @@ FecDecoderBase(observer) {
 
 }
 
-FecDecoder2::~FecDecoder2() {
+void
+FecDecoder2::destroy() {
     destroy_decoders();
 }
 
@@ -144,9 +145,7 @@ FecDecoder2::maybe_decode_rtp_packet(uint16_t rtp_sequence, const uint8_t* rtp_p
         return false;
     }
 
-    group->available_rtp_packets.push_back(rtp_sequence);
     decode_rtp(rtp_sequence, group, rtp_packet_data, rtp_packet_len);
-
     return true;
 }
 
@@ -162,15 +161,19 @@ FecDecoder2::decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, const 
     /** 'BandFecHeaderType::i' takes values from 0 to 'BandFecHeaderType::n' + 'BandFecHeaderType::k' - 1
      */
     header.i = rtp_sequence - base_seq;
+
+    BandFecHeaderType be_header;
     /** convert 'BandFecHeaderType' from host to network
      */
-    header.s = UINT16_TO_BE(header.s);
-    header.n = UINT16_TO_BE(header.n);
-    header.k = UINT16_TO_BE(header.k);
-    header.i = UINT32_TO_BE(header.i);
+    be_header.s = UINT16_TO_BE(header.s);
+    be_header.n = UINT16_TO_BE(header.n);
+    be_header.k = UINT16_TO_BE(header.k);
+    be_header.i = UINT32_TO_BE(header.i);
+    be_header.w = header.w;
+    be_header.g = header.g;
 
     std::vector<uint8_t> fec_block;
-    fec_block.insert(fec_block.end(), (char*)&header, (char*)&header + sizeof(header));
+    fec_block.insert(fec_block.end(), (char*)&be_header, (char*)&be_header + sizeof(be_header));
     fec_block.insert(fec_block.end(), (char*)data, (char*)data + len);
 
     assert(len <= fec_group->bandfec_header->s);
@@ -178,7 +181,7 @@ FecDecoder2::decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, const 
      */
     fec_block.resize(sizeof(BandFecHeaderType) + fec_group->bandfec_header->s);
 
-    decode_fec_block(fec_group->sequence, fec_block.data(), (int)fec_block.size());
+    decode_fec_block(fec_group->sequence, &header, fec_block.data(), (int)fec_block.size(), false);
 }
 
 void
@@ -224,10 +227,16 @@ FecDecoder2::on_sequence_end(uint16_t sequence) {
 }
 
 void
-FecDecoder2::on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len) {
+FecDecoder2::on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len, bool recovered) {
     assert(m_fec_groups.count(sequence_number) != 0);
     if (0 == m_fec_groups.count(sequence_number)) {
         std::cerr << "no sequence number(" << sequence_number << ") found" << std::endl;
+        return;
+    }
+
+    if (!recovered) {
+        /** we only output recovered rtp packets
+         */
         return;
     }
 
@@ -250,13 +259,6 @@ FecDecoder2::on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* 
         std::cerr << "set ssrc to " << rtp_header.ssrc << " on decoding the very first packet" << std::endl;
     } else if (m_ssrc != rtp_header.ssrc) {
         std::cerr << "invalid rtp packet, ssrc does not match!" << std::endl;
-        return;
-    }
-
-    auto avail_rtp = m_fec_groups[sequence_number]->available_rtp_packets;
-    if (avail_rtp.end() != std::find(avail_rtp.begin(), avail_rtp.end(), rtp_header.seq)) {
-        /** we only output missing rtp packets
-         */
         return;
     }
 

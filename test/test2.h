@@ -3,7 +3,7 @@
 
 #include "./network_conditioner.h"
 #include "../fec_codec.h"
-#include "../utils.h"
+#include "../utils/utils.h"
 
 #include <iostream>
 #include <map>
@@ -35,12 +35,16 @@ public:
         if (m_encoder) {
             m_encoder->flush();
 
-            destroy_fec_encoder(m_encoder);
+            destroy_fec_encoder2(m_encoder);
             m_encoder = nullptr;
         }
 
-        destroy_fec_decoder(m_decoder);
+        PacketLossStats stats;
+        destroy_fec_decoder2(m_decoder, stats);
         m_decoder = nullptr;
+
+        std::cerr << "stats -- packet lossrate: " << (stats.lossrate * 100)
+            << "%, effective packet lossrate: " << (stats.effective_lossrate * 100) << "%, missing groups: " << stats.missing_groups << std::endl;
 #if 0
         int constructed_frames = 0;
         for (auto& sequence_frames : m_frames) {

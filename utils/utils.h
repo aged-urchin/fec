@@ -1,7 +1,7 @@
 #ifndef ___UTILS_H___
 #define ___UTILS_H___
 
-#include "fec_codec.h"
+#include "../fec_codec.h"
 
 #include <cassert>
 #include <cstring>

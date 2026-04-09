@@ -1,5 +1,5 @@
 #include "fec_decoder.h"
-#include "utils.h"
+#include "./utils/utils.h"
 
 #include <iostream>
 
@@ -55,7 +55,8 @@ FecDecoderBase(observer) {
 
 }
 
-FecDecoder::~FecDecoder() {
+void
+FecDecoder::destroy() {
     destroy_decoders();
 
     while (!m_pending_frames.empty()) {
@@ -67,7 +68,7 @@ FecDecoder::~FecDecoder() {
 }
 
 void
-FecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data, int len) {
+FecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data, int len, bool recovered) {
     auto remaining_data = (uint8_t*)data;
     auto remaining_len  = len;
 

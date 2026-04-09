@@ -55,8 +55,12 @@ public:
             m_encoder = nullptr;
         }
 
-        destroy_fec_decoder(m_decoder);
+        PacketLossStats stats;
+        destroy_fec_decoder(m_decoder, stats);
         m_decoder = nullptr;
+
+        std::cerr << "stats -- packet lossrate: " << (stats.lossrate * 100)
+                  << "%, effective packet lossrate: " << (stats.effective_lossrate * 100) << "%, missing groups: " << stats.missing_groups << std::endl;
 
         int constructed_frames = 0;
         for (auto& sequence_frames : m_frames) {

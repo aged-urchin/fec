@@ -149,13 +149,9 @@ struct FecHeader {
 /** lossrate statistics
  */
 struct PacketLossStats {
-    int32_t  lossrate;               ///< overall lossrate in precentage (-1 if unavailable)
-    int32_t  discontinuity_groups;   ///< # missing groups (-1 if unavailable)
-    int32_t  lost_packets;           ///< # lost packets so far (-1 if unavailable)
-    int32_t  recovered_packets;      ///< # recovered packets so far (-1 if unavailable)
-    int32_t  late_packets;           ///< # outdated packets(e.g. arrives after the sequence is forcely ended) (-1 if unavailable)
-    int32_t  num_distributions;      ///< # distributions (-1 if unavailable)
-    int32_t* distributions;          ///< statistics of consecutive Loss streaks(e.g. if 'distributions[3] == 100', that means there are 100 occurrences that has a consecutive loss of 3 packets)
+    float    lossrate;           ///< packet loss rate(in percentage) before recovery (-1 if unavailable)
+    float    effective_lossrate; ///< packet loss rate(in percentage) after recovery  (-1 if unavailable)
+    int32_t  missing_groups;     ///< # missing groups (-1 if unavailable)
 };
 
 /**  fec packet memory layout
@@ -224,15 +220,18 @@ public:
 class IFecEncoder {
 public:
     virtual ~IFecEncoder() = default;
-
+    /** set block size(in bytes)
+     */
     virtual bool set_block_size(int size_in_bytes) = 0;
-
+    /** set group size(number data blocks and number redundant blocks)
+     */
     virtual bool set_red_params(int blocks_in_group, int red_blocks_in_group) = 0;
-
     /** encode one frame (e.g. one udp/rtp packet)
      */
     virtual void encode(const uint8_t* data, int data_len) = 0;
-
+    /** flush the encoder
+     *  (should be called at the end of the stream)
+     */
     virtual void flush() = 0;
 };
 
@@ -286,7 +285,7 @@ IFecDecoder*
 create_fec_decoder(IFecDecoderObserver* observer);
 
 void
-destroy_fec_decoder(IFecDecoder* decoder);
+destroy_fec_decoder(IFecDecoder* decoder, PacketLossStats& stats);
 
 /** APIs for rtp extensions
  */
@@ -300,6 +299,6 @@ IFecDecoder*
 create_fec_decoder2(IFecDecoderObserver* observer);
 
 void
-destroy_fec_decoder2(IFecDecoder* decoder);
+destroy_fec_decoder2(IFecDecoder* decoder, PacketLossStats& stats);
 
 #endif ///< ___FEC_CODEC_H___

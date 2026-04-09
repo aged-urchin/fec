@@ -8,10 +8,10 @@ class FecDecoder : public FecDecoderBase {
 public:
     FecDecoder(IFecDecoderObserver* observer);
 
-    ~FecDecoder() override;
+    void destroy();
 
 private:
-    void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len) override;
+    void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len, bool recovered) override;
 
 private:
     struct ReconstructedFrame {
@@ -19,6 +19,7 @@ private:
         std::map<int, int>      slots;
 
         ReconstructedFrame(int size);
+
         bool ready();
         bool push_fragment(int offset, const uint8_t* data, int size);
     };

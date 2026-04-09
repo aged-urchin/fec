@@ -2,7 +2,6 @@
 #include "fec_decoder.h"
 #include "fec_encoder2.h"
 #include "fec_decoder2.h"
-#include "utils.h"
 
 FecFragmentHeader kEndingFragHeader{ 0, 0, 0, 0 };
 
@@ -24,8 +23,14 @@ create_fec_decoder(IFecDecoderObserver* observer) {
 }
 
 void
-destroy_fec_decoder(IFecDecoder* decoder) {
-    delete decoder;
+destroy_fec_decoder(IFecDecoder* decoder, PacketLossStats& stats) {
+    auto fec_decoder = (FecDecoder*) decoder;
+    if (fec_decoder) {
+        fec_decoder->destroy();
+        fec_decoder->loss_stats(stats);
+    }
+
+    delete fec_decoder;
 }
 
 IFecEncoder*
@@ -46,6 +51,12 @@ create_fec_decoder2(IFecDecoderObserver* observer) {
 }
 
 void
-destroy_fec_decoder2(IFecDecoder* decoder) {
-    delete decoder;
+destroy_fec_decoder2(IFecDecoder* decoder, PacketLossStats& stats) {
+    auto fec_decoder = (FecDecoder2*)decoder;
+    if (fec_decoder) {
+        fec_decoder->destroy();
+        fec_decoder->loss_stats(stats);
+    }
+
+    delete fec_decoder;
 }

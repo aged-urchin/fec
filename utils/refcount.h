@@ -3,11 +3,9 @@
 
 #include <mutex>
 
-class RefCount
-{
+class RefCount {
 public:
-    virtual unsigned long retain()
-    {
+    virtual unsigned long retain() {
         m_lock.lock();
         const unsigned long refs = ++m_refs;
         m_lock.unlock();
@@ -15,14 +13,12 @@ public:
         return refs;
     }
 
-    virtual unsigned long release()
-    {
+    virtual unsigned long release() {
         m_lock.lock();
         const unsigned long refs = --m_refs;
         m_lock.unlock();
 
-        if (refs == 0)
-        {
+        if (0 == refs) {
             delete this;
         }
 
@@ -30,8 +26,7 @@ public:
     }
 
 protected:
-    RefCount()
-    {
+    RefCount() {
         m_refs = 1;
     }
 

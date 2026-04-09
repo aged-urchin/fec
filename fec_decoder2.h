@@ -8,7 +8,7 @@ class FecDecoder2 : public FecDecoderBase {
 public:
     FecDecoder2(IFecDecoderObserver* observer);
 
-    ~FecDecoder2() override;
+    void destroy();
 
     void decode(const uint8_t* data, int len) override;
 
@@ -17,7 +17,6 @@ private:
         uint16_t                     sequence;
         BandFecHeaderType*           bandfec_header;
         std::map<uint16_t, uint16_t> rtp_packet_sizes;
-        std::vector<uint16_t>        available_rtp_packets;
 
         FecGroup(uint16_t sequence, const BandFecHeaderType* header, RtpFecExt* ext);
         ~FecGroup();
@@ -35,7 +34,7 @@ private:
 
     void on_sequence_end(uint16_t sequence) override;
 
-    void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len) override;
+    void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len, bool recovered) override;
 
 private:
 

@@ -1,7 +1,8 @@
 #include "fec_decoder_base.h"
 #include "fec_packet.h"
 #include "bandfec.h"
-#include "timeutils.h"
+#include "./utils/number_unwrapper.h"
+#include "./utils/timeutils.h"
 
 #include <iostream>
 #include <cassert>
@@ -15,7 +16,7 @@ on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t 
         std::cerr << "invalid position " << position << ", block size is " << len << std::endl;
     }
 
-    decoder->on_new_block(sequence, (int32_t)position / len, (const uint8_t*)buf, len);
+    decoder->on_block_decoded(sequence, (int32_t)position / len, (const uint8_t*)buf, len);
 }
 
 FecDecoderBase::FecDecoderBase(IFecDecoderObserver* observer) :
@@ -51,30 +52,38 @@ FecDecoderBase::decode(const uint8_t* data, int len) {
 
     maybe_remove_outdated_decoders(now_ms, header->sequence_number);
 
+    BandFecHeaderType bandfec_header;
+    bandfec_parse_block((void*)packet->get_payload(), packet->get_payload_size(), bandfec_header);
+
     if (0 == m_seq_decoders.count(header->sequence_number)) {
         auto decoder = new Decoder;
 
-        decoder->creation_time = now_ms;
-        decoder->decoder       = create_bandfec_decoder(&on_fec_receive, (int64_t)this, header->sequence_number);
+        decoder->n              = bandfec_header.n;
+        decoder->k              = bandfec_header.k;
+        decoder->creation_time  = now_ms;
+        decoder->decoder        = create_bandfec_decoder(&on_fec_receive, (int64_t)this, header->sequence_number);
 
         m_seq_decoders[header->sequence_number] = decoder;
 
-        on_new_sequence(packet);
+        if (NumberUnwrapper<uint16_t>::is_newer_value(header->sequence_number, m_latest_sequence_num)) {
+            m_latest_sequence_num = header->sequence_number;
+            m_missing_groups += ((((uint32_t)header->sequence_number + 65536) - m_latest_sequence_num) % 65536);
+        } else {
+            std::cerr << "new sequence(" << header->sequence_number << ") is later than latest(" << m_latest_sequence_num << ")" << std::endl;
+        }
+
+        on_sequence_start(header->sequence_number, header, &bandfec_header);
     }
 
-    decode_fec_block(header->sequence_number, packet->get_payload(), packet->get_payload_size());
+    decode_fec_block(header->sequence_number, &bandfec_header, packet->get_payload(), packet->get_payload_size(), header->red);
     packet->release();
 }
 
 void
 FecDecoderBase::loss_stats(PacketLossStats& stats) {
-    stats.lossrate              = -1;
-    stats.discontinuity_groups  = -1;
-    stats.lost_packets          = -1;
-    stats.recovered_packets     = -1;
-    stats.late_packets          = -1;
-    stats.num_distributions     = -1;
-    stats.distributions         = nullptr;
+    stats.lossrate           = (m_expected_data_packets - m_received_data_packets) * 1. / m_expected_data_packets;
+    stats.effective_lossrate = (m_expected_data_packets - m_received_data_packets - m_recovered_packets) * 1. / m_expected_data_packets;
+    stats.missing_groups     = m_missing_groups;
 }
 
 int64_t
@@ -106,8 +115,21 @@ FecDecoderBase::maybe_remove_outdated_decoders(int64_t now_ms, int32_t reset_seq
 }
 
 void
-FecDecoderBase::decode_fec_block(uint16_t sequence_number, const void* data, int len) {
+FecDecoderBase::decode_fec_block(uint16_t sequence_number, const BandFecHeaderType* bandfec_header, const void* data, int len, bool red) {
     auto decoder = m_seq_decoders[sequence_number];
+
+    if (red) {
+        assert(bandfec_header->i >= decoder->n);
+        assert(bandfec_header->i < decoder->n + decoder->k);
+        assert(decoder->red_packets < decoder->k);
+
+        ++decoder->red_packets;
+    } else {
+        assert(bandfec_header->i < decoder->n);
+        assert(decoder->data_packets.size() < decoder->n);
+
+        decoder->data_packets.push_back(bandfec_header->i);
+    }
     /** sequential delivery is unnecessary(the decoder accepts out-of-order packets)
      */
     bandfec_decode(decoder->decoder, (void*)data, len);
@@ -117,21 +139,6 @@ void
 FecDecoderBase::send_frame(uint16_t sequence_number, uint16_t frame_number, const uint8_t* data, int data_len) {
     ///< std::cerr << "seq: " << sequence_number << ", frame: " << frame_number << std::endl;
     m_observer->on_decoder_output(this, sequence_number, frame_number, data, data_len);
-}
-
-void
-FecDecoderBase::on_new_sequence(const IFecPacket* packet) {
-    auto header = packet->get_header();
-
-    BandFecHeaderType bandfec_header;
-    bandfec_parse_block((void*)packet->get_payload(), packet->get_payload_size(), bandfec_header);
-
-    on_sequence_start(header->sequence_number, header, &bandfec_header);
-}
-
-void
-FecDecoderBase::on_complete_sequence(uint16_t sequence) {
-    on_sequence_end(sequence);
 }
 
 void
@@ -145,10 +152,20 @@ FecDecoderBase::remove_decoder(uint16_t sequence) {
     flush_bandfec_decoder(decoder->decoder);
     destroy_bandfec_decoder(decoder->decoder);
 
+    auto num_data_packets      = decoder->data_packets.size();
+    auto num_recovered_packets = decoder->recovered_packets;
+
+    assert(decoder->n >= num_data_packets); ///<!!! no retransmission of fec blocks
+    assert(decoder->n >= num_data_packets + num_recovered_packets);
+
+    m_received_data_packets += num_data_packets;
+    m_expected_data_packets += decoder->n;
+    m_recovered_packets     += num_recovered_packets;
+
     delete decoder;
     m_seq_decoders.erase(sequence);
 
-    on_complete_sequence(sequence);
+    on_sequence_end(sequence);
 }
 
 void
@@ -157,4 +174,18 @@ FecDecoderBase::destroy_decoders() {
         auto itr = m_seq_decoders.begin();
         remove_decoder(itr->first);
     }
+}
+
+void
+FecDecoderBase::on_block_decoded(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len) {
+    auto decoder      = m_seq_decoders[sequence_number];
+    auto itr          = std::find(decoder->data_packets.begin(), decoder->data_packets.end(), pos);
+    auto is_recovered = itr == decoder->data_packets.end();
+
+    assert(pos < decoder->n);
+    if (is_recovered) {
+        ++decoder->recovered_packets;
+    }
+
+    on_new_block(sequence_number, pos, data, len, is_recovered);
 }
