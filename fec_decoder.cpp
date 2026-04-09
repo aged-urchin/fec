@@ -1,6 +1,4 @@
 #include "fec_decoder.h"
-#include "fec_packet.h"
-#include "bandfec.h"
 #include "utils.h"
 
 #include <iostream>

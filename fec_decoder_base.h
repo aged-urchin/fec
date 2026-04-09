@@ -17,6 +17,8 @@ public:
 
     void decode(const uint8_t* data, int len) override;
 
+    void loss_stats(PacketLossStats& stats) override;
+
 protected:
     virtual void on_sequence_start(uint16_t sequence, const FecHeader* header, const BandFecHeaderType* bandfec_header) { }
 

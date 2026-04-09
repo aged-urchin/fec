@@ -145,6 +145,18 @@ struct FecHeader {
 #pragma warning(pop)
 #endif
 
+/** lossrate statistics
+ */
+struct PacketLossStats {
+    int32_t  lossrate;               ///< overall lossrate in precentage (-1 if unavailable)
+    int32_t  discontinuity_groups;   ///< # missing groups (-1 if unavailable)
+    int32_t  lost_packets;           ///< # lost packets so far (-1 if unavailable)
+    int32_t  recovered_packets;      ///< # recovered packets so far (-1 if unavailable)
+    int32_t  late_packets;           ///< # outdated packets(e.g. arrives after the sequence is forcely ended) (-1 if unavailable)
+    int32_t  num_distributions;      ///< # distributions (-1 if unavailable)
+    int32_t* distributions;          ///< statistics of consecutive Loss streaks(e.g. if 'distributions[3] == 100', that means there are 100 occurrences that has a consecutive loss of 3 packets)
+};
+
 /**  fec packet memory layout
  *
  *   with 'FecHeader::typ' == 0:
@@ -250,9 +262,13 @@ public:
     /** decode one fec packet (e.g. from an udp socket)
      */
     virtual void decode(const uint8_t* data, int len) = 0;
+
+    /** get current packet loss statistics
+     */
+    virtual void loss_stats(PacketLossStats& stats) = 0;
 };
 
-/** codec apis for 'kFecExtNull'
+/** APIs
  */
 IFecEncoder*
 create_fec_encoder(IFecEncoderObserver* observer);
@@ -266,7 +282,7 @@ create_fec_decoder(IFecDecoderObserver* observer);
 void
 destroy_fec_decoder(IFecDecoder* decoder);
 
-/** codec apis for 'kFecExtRtp'
+/** APIs for rtp extensions
  */
 IFecEncoder*
 create_fec_encoder2(IFecEncoderObserver* observer);

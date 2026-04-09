@@ -59,6 +59,17 @@ FecDecoderBase::decode(const uint8_t* data, int len) {
 }
 
 void
+FecDecoderBase::loss_stats(PacketLossStats& stats) {
+    stats.lossrate              = -1;
+    stats.discontinuity_groups  = -1;
+    stats.lost_packets          = -1;
+    stats.recovered_packets     = -1;
+    stats.late_packets          = -1;
+    stats.num_distributions     = -1;
+    stats.distributions         = nullptr;
+}
+
+void
 FecDecoderBase::maybe_remove_outdated_decoders(int32_t reset_sequence_number) {
     std::vector<uint16_t> outdated_decoders;
     for (auto& decoder : m_seq_decoders) {
