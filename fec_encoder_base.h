@@ -65,7 +65,7 @@ private:
     };
 
     bool                        m_flushed{ false };
-    uint16_t                    m_group_num{ 0 };
+    uint16_t                    m_sequence_number{ kFristSeqNum };
     IFecEncoderObserver*        m_observer{ nullptr };
 
     std::mutex                  m_mutex;

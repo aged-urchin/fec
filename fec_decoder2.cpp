@@ -1,6 +1,7 @@
 #include "fec_decoder2.h"
 #include "bandfec.h"
 #include "utils.h"
+#include "timeutils.h"
 
 #include <iostream>
 #include <cassert>
@@ -90,12 +91,18 @@ FecDecoder2::decode(const uint8_t* data, int len) {
         return;
     }
 
+    auto now_ms = Time::clocktime();
     /** increase 'Decoder::no_packets_cnt' of all existing sequence decoders, for this is a rtp packet of a new sequence
      */
-    maybe_remove_outdated_decoders();
+    purge_expired_data(now_ms);
+
     /** cache all rtp packets before the first red packet is recieved
      */
-    m_rtp_packets[rtp_header.seq] = { data, data + len };
+    StoredRtpPacket stored_packet;
+    stored_packet.arrivetime_ms = now_ms;
+    stored_packet.packet        = { data, data + len };
+
+    m_rtp_packets[rtp_header.seq] = stored_packet;
 }
 
 bool
@@ -103,6 +110,22 @@ FecDecoder2::is_rtp(const uint8_t* data, size_t len) {
     /** we could tell the difference between a rtp packet and a fec packet from the beginning two bits
      */
     return len >= 12 && 0x80 == (data[0] & 0xC0);
+}
+
+void
+FecDecoder2::purge_expired_data(int64_t now_ms) {
+    auto lifetime_ms = get_max_packet_lifetime();
+    for (auto itr = m_rtp_packets.begin(); itr != m_rtp_packets.end(); ) {
+        auto rtp_packet = *itr;
+        if (now_ms - itr->second.arrivetime_ms >= lifetime_ms) {
+            std::cerr << "purge overdue rtp packet with sequence number: " << itr->first << std::endl;
+            itr = m_rtp_packets.erase(itr);
+        } else {
+            ++itr;
+        }
+    }
+
+    maybe_remove_outdated_decoders(now_ms);
 }
 
 bool
@@ -178,7 +201,7 @@ FecDecoder2::on_sequence_start(uint16_t sequence, const FecHeader* header, const
      */
     for (auto itr = m_rtp_packets.begin(); itr != m_rtp_packets.end(); ) {
         auto rtp_packet = *itr;
-        if (maybe_decode_rtp_packet(rtp_packet.first, rtp_packet.second.data(), (int)rtp_packet.second.size())) {
+        if (maybe_decode_rtp_packet(rtp_packet.first, rtp_packet.second.packet.data(), (int)rtp_packet.second.packet.size())) {
             itr = m_rtp_packets.erase(itr);
         } else {
             ++itr;

@@ -1,6 +1,7 @@
 #include "fec_decoder_base.h"
 #include "fec_packet.h"
 #include "bandfec.h"
+#include "timeutils.h"
 
 #include <iostream>
 #include <cassert>
@@ -33,25 +34,32 @@ FecDecoderBase::set_max_forward_packets(int packets) {
 }
 
 void
+FecDecoderBase::set_max_packet_lifetime(const int64_t max_lifetime_ms) {
+    m_max_packet_lifetime_ms = max_lifetime_ms;
+    std::cerr << "max packet lifetime changed to " << max_lifetime_ms << std::endl;
+}
+
+void
 FecDecoderBase::decode(const uint8_t* data, int len) {
     auto packet = FecPacket::parse_from_buffer(data, len);
     if (!packet) {
         return;
     }
 
+    auto now_ms = Time::clocktime();
     auto header = packet->get_header();
-    maybe_remove_outdated_decoders(header->sequence_number);
+
+    maybe_remove_outdated_decoders(now_ms, header->sequence_number);
 
     if (0 == m_seq_decoders.count(header->sequence_number)) {
         auto decoder = new Decoder;
-        decoder->decoder = create_bandfec_decoder(&on_fec_receive, (int64_t)this, header->sequence_number);
+
+        decoder->creation_time = now_ms;
+        decoder->decoder       = create_bandfec_decoder(&on_fec_receive, (int64_t)this, header->sequence_number);
 
         m_seq_decoders[header->sequence_number] = decoder;
 
-        BandFecHeaderType bandfec_header;
-        bandfec_parse_block((void*)packet->get_payload(), packet->get_payload_size(), bandfec_header);
-
-        on_sequence_start(header->sequence_number, header, &bandfec_header);
+        on_new_sequence(packet);
     }
 
     decode_fec_block(header->sequence_number, packet->get_payload(), packet->get_payload_size());
@@ -69,14 +77,26 @@ FecDecoderBase::loss_stats(PacketLossStats& stats) {
     stats.distributions         = nullptr;
 }
 
+int64_t
+FecDecoderBase::get_max_packet_lifetime() const {
+    return m_max_packet_lifetime_ms;
+}
+
 void
-FecDecoderBase::maybe_remove_outdated_decoders(int32_t reset_sequence_number) {
+FecDecoderBase::maybe_remove_outdated_decoders(int64_t now_ms, int32_t reset_sequence_number) {
     std::vector<uint16_t> outdated_decoders;
+
     for (auto& decoder : m_seq_decoders) {
-        if ((int32_t)decoder.first == reset_sequence_number) {
-            decoder.second->max_consecutive_next_group_packets = 0;
-        } else if (++decoder.second->max_consecutive_next_group_packets > m_max_forward_packets) {
+        if (now_ms - decoder.second->creation_time >= m_max_packet_lifetime_ms) {
+            std::cerr << "removing overdue decoder: " << decoder.first << std::endl; 
             outdated_decoders.push_back(decoder.first);
+        } else {
+            if ((int32_t)decoder.first == reset_sequence_number) {
+                decoder.second->max_consecutive_next_group_packets = 0;
+            } else if (++decoder.second->max_consecutive_next_group_packets > m_max_forward_packets) {
+                std::cerr << "removing decoder(seq: " << decoder.first << ") triggered by forward packets" << std::endl;
+                outdated_decoders.push_back(decoder.first);
+            }
         }
     }
 
@@ -100,6 +120,21 @@ FecDecoderBase::send_frame(uint16_t sequence_number, uint16_t frame_number, cons
 }
 
 void
+FecDecoderBase::on_new_sequence(const IFecPacket* packet) {
+    auto header = packet->get_header();
+
+    BandFecHeaderType bandfec_header;
+    bandfec_parse_block((void*)packet->get_payload(), packet->get_payload_size(), bandfec_header);
+
+    on_sequence_start(header->sequence_number, header, &bandfec_header);
+}
+
+void
+FecDecoderBase::on_complete_sequence(uint16_t sequence) {
+    on_sequence_end(sequence);
+}
+
+void
 FecDecoderBase::remove_decoder(uint16_t sequence) {
     if (0 == m_seq_decoders.count(sequence)) {
         return;
@@ -113,7 +148,7 @@ FecDecoderBase::remove_decoder(uint16_t sequence) {
     delete decoder;
     m_seq_decoders.erase(sequence);
 
-    on_sequence_end(sequence);
+    on_complete_sequence(sequence);
 }
 
 void

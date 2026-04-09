@@ -10,6 +10,7 @@ enum FecExtType {
     kFecExtRtp  = 1,
 };
 
+enum { kFristSeqNum = 0 };
 enum { kRtpFecExtOneByteSizeMax = 127, kRtpFecExtTwoByteSizeMax = 32767 };
 
 /** for 'kFecExtNull':
@@ -133,7 +134,7 @@ struct FecHeader {
     uint8_t     red : 1; ///< redundant: 0 for original packet, 1 for redundant packet
 
     uint8_t     reserved;
-    uint16_t    sequence_number;
+    uint16_t    sequence_number; ///< ranges from kFristSeqNum, kFristSeqNum + 1, ...
 
     /** variable-length extension field for additional FEC header information
      *  only valid and contains data when header type (typ) is non-zero
@@ -258,6 +259,11 @@ public:
      *  (default is 3)
      */
     virtual void set_max_forward_packets(int packets) = 0;
+
+    /** set expire time for all pending data(e.g. rtp packets or frames being reconstructed)
+     *  (default is 3000ms)
+     */
+    virtual void set_max_packet_lifetime(const int64_t max_lifetime_ms) = 0;
 
     /** decode one fec packet (e.g. from an udp socket)
      */

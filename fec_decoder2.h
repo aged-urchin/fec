@@ -25,6 +25,8 @@ private:
 
     bool is_rtp(const uint8_t* data, size_t len);
 
+    void purge_expired_data(int64_t now_ms);
+
     bool maybe_decode_rtp_packet(uint16_t rtp_sequence, const uint8_t* rtp_packet_data, int rtp_packet_len);
 
     void decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, const void* data, int len);
@@ -37,9 +39,14 @@ private:
 
 private:
 
-    int64_t                                     m_ssrc{ -1 };
-    std::map<uint16_t, std::vector<uint8_t>>    m_rtp_packets;
-    std::map<uint16_t, FecGroup*>               m_fec_groups;
+    struct StoredRtpPacket{
+        int64_t              arrivetime_ms;
+        std::vector<uint8_t> packet;
+    };
+
+    int64_t                                 m_ssrc{ -1 };
+    std::map<uint16_t, StoredRtpPacket>     m_rtp_packets;
+    std::map<uint16_t, FecGroup*>           m_fec_groups;
 };
 
 #endif ///< ___FEC_DECODER2_H___

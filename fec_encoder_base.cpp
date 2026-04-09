@@ -83,7 +83,7 @@ FecEncoderBase::create_encoder() {
                                kFecParamG,
                                &on_fec_send,
                                (int64_t)this,
-                               m_group_num++); ///< 0, 1, 2, ...
+                               m_sequence_number++); ///< kFirstSeqNum, kFirstSeqNum + 1, ...
     if (encoder) {
         if (!m_active_config.is_equal(m_config)) {
             std::cerr << "active config changed to " << m_config.to_string() << std::endl;
