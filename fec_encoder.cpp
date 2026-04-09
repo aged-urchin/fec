@@ -12,7 +12,7 @@ FecEncoderBase(observer) {
 
 void
 FecEncoder::do_encode(const uint8_t* data, int data_len) {
-    FecFragmentHeader header;
+    FecFragmentHeader header{ 0 };
     auto src      = (uint8_t*)data;
     auto src_size = data_len;
 

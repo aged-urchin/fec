@@ -16,10 +16,10 @@ enum { kRtpFecExtOneByteSizeMax = 127, kRtpFecExtTwoByteSizeMax = 32767 };
  *  protected by fec(e.g. as part of fec payload) and used to reconstruct udp packets from fec packets
  */
 struct FecFragmentHeader {
-    uint16_t    frame_number{ 0 };
-    uint16_t    frame_size{ 0 };
-    uint16_t    frag_offset{ 0 };
-    uint16_t    frag_size{ 0 };
+    uint16_t    frame_number;
+    uint16_t    frame_size;
+    uint16_t    frag_offset;
+    uint16_t    frag_size;
 };
 
 /** rtp fec extension (with 'FecHeader::typ' == 1)
@@ -119,7 +119,7 @@ struct RtpFecExt {
  */
 #ifdef _MSC_VER
 #pragma warning(push)
-#pragma warning(disable : 4200)
+#pragma warning(disable : 4200) ///< warning C4200: nonstandard extension used: zero-sized array in struct/union
 #endif
 struct FecHeader {
     /** FEC:      11
@@ -241,7 +241,11 @@ class IFecDecoder {
 public:
     virtual ~IFecDecoder() = default;
 
-    virtual void set_reorder_window_size(int size) = 0;
+    /** set the maximum number of subsequent out-of-order packets
+     *  that can be received before forcing completion and processing of the current unfinished data sequence.
+     *  (default is 3)
+     */
+    virtual void set_max_forward_packets(int packets) = 0;
 
     /** decode one fec packet (e.g. from an udp socket)
      */

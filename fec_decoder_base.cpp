@@ -27,9 +27,9 @@ FecDecoderBase::~FecDecoderBase() {
 }
 
 void
-FecDecoderBase::set_reorder_window_size(int size) {
-    m_reorder_window_size = size;
-    std::cerr << "reorder window size changed to " << m_reorder_window_size << std::endl;
+FecDecoderBase::set_max_forward_packets(int packets) {
+    m_max_forward_packets = packets;
+    std::cerr << "max forward packets changed to " << packets << std::endl;
 }
 
 void
@@ -63,8 +63,8 @@ FecDecoderBase::maybe_remove_outdated_decoders(int32_t reset_sequence_number) {
     std::vector<uint16_t> outdated_decoders;
     for (auto& decoder : m_seq_decoders) {
         if ((int32_t)decoder.first == reset_sequence_number) {
-            decoder.second->no_packets_cnt = 0;
-        } else if (++decoder.second->no_packets_cnt > m_reorder_window_size) {
+            decoder.second->max_consecutive_next_group_packets = 0;
+        } else if (++decoder.second->max_consecutive_next_group_packets > m_max_forward_packets) {
             outdated_decoders.push_back(decoder.first);
         }
     }

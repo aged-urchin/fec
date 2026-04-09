@@ -61,7 +61,7 @@ private:
     };
 
     enum {
-        kFecParamW = 40, kFecParamG = 4
+        kFecParamW = 40, kFecParamG = 4,
     };
 
     bool                        m_flushed{ false };

@@ -13,7 +13,7 @@ public:
 
     ~FecDecoderBase() override;
 
-    void set_reorder_window_size(int size) override;
+    void set_max_forward_packets(int size) override;
 
     void decode(const uint8_t* data, int len) override;
 
@@ -39,11 +39,11 @@ private:
     friend void on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2);
 
     struct Decoder {
-        int             no_packets_cnt{ 0 }; ///< death counter
+        int             max_consecutive_next_group_packets{ 0 }; ///< death counter
         BandFecDecoder* decoder{ nullptr };
     };
 
-    int                                 m_reorder_window_size{ 3 };
+    int                                 m_max_forward_packets{ 3 };
     IFecDecoderObserver*                m_observer;
     std::map<uint16_t, Decoder*>        m_seq_decoders;   ///< FecHeader::sequence_number
 };
