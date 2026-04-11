@@ -11,6 +11,7 @@ enum FecExtType {
 };
 
 enum { kFristSeqNum = 0 };
+enum { kMaxContLossCount = 64 };
 enum { kRtpFecExtOneByteSizeMax = 127, kRtpFecExtTwoByteSizeMax = 32767 };
 
 /** for 'kFecExtNull':
@@ -149,9 +150,10 @@ struct FecHeader {
 /** lossrate statistics
  */
 struct PacketLossStats {
-    float    lossrate;           ///< packet loss rate(in percentage) before recovery (-1 if unavailable)
-    float    effective_lossrate; ///< packet loss rate(in percentage) after recovery  (-1 if unavailable)
-    int32_t  missing_groups;     ///< # missing groups (-1 if unavailable)
+    float    lossrate;                          ///< packet loss rate(in percentage) before recovery (-1 if unavailable)
+    float    effective_lossrate;                ///< packet loss rate(in percentage) after recovery  (-1 if unavailable)
+    int32_t  missing_groups;                    ///< # missing groups (-1 if unavailable)
+    int32_t  loss_dist[kMaxContLossCount + 1];  ///< occurrences of successive packet losses
 };
 
 /**  fec packet memory layout

@@ -54,7 +54,7 @@ private:
         int64_t                 creation_time{ 0 };
         int32_t                 max_consecutive_next_group_packets{ 0 }; ///< death counter
         std::vector<int32_t>    data_packets;
-        int32_t                 red_packets{ 0 };
+        std::vector<int32_t>    red_packets;
         int32_t                 recovered_packets{ 0 };
         BandFecDecoder*         decoder{ nullptr };
     };
@@ -66,6 +66,7 @@ private:
     int64_t                             m_expected_data_packets{ 0 };
     int64_t                             m_recovered_packets{ 0 };
     int64_t                             m_missing_groups{ 0 };
+    int32_t                             m_loss_distribution[kMaxContLossCount + 1];
 
     uint16_t                            m_latest_sequence_num{ 0 };
     IFecDecoderObserver*                m_observer;

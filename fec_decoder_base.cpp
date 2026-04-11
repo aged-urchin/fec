@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <cassert>
+#include <set>
 
 void
 on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2) {
@@ -21,7 +22,7 @@ on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t 
 
 FecDecoderBase::FecDecoderBase(IFecDecoderObserver* observer) :
 m_observer(observer) {
-
+    memset(m_loss_distribution, 0, sizeof(m_loss_distribution));
 }
 
 FecDecoderBase::~FecDecoderBase() {
@@ -84,6 +85,8 @@ FecDecoderBase::loss_stats(PacketLossStats& stats) {
     stats.lossrate           = (m_expected_data_packets - m_received_data_packets) * 1. / m_expected_data_packets;
     stats.effective_lossrate = (m_expected_data_packets - m_received_data_packets - m_recovered_packets) * 1. / m_expected_data_packets;
     stats.missing_groups     = m_missing_groups;
+
+    memcpy(stats.loss_dist, m_loss_distribution, sizeof(m_loss_distribution));
 }
 
 int64_t
@@ -121,9 +124,9 @@ FecDecoderBase::decode_fec_block(uint16_t sequence_number, const BandFecHeaderTy
     if (red) {
         assert(bandfec_header->i >= decoder->n);
         assert(bandfec_header->i < decoder->n + decoder->k);
-        assert(decoder->red_packets < decoder->k);
+        assert(decoder->red_packets.size() < decoder->k);
 
-        ++decoder->red_packets;
+        decoder->red_packets.push_back(bandfec_header->i);
     } else {
         assert(bandfec_header->i < decoder->n);
         assert(decoder->data_packets.size() < decoder->n);
@@ -137,7 +140,6 @@ FecDecoderBase::decode_fec_block(uint16_t sequence_number, const BandFecHeaderTy
 
 void
 FecDecoderBase::send_frame(uint16_t sequence_number, uint16_t frame_number, const uint8_t* data, int data_len) {
-    ///< std::cerr << "seq: " << sequence_number << ", frame: " << frame_number << std::endl;
     m_observer->on_decoder_output(this, sequence_number, frame_number, data, data_len);
 }
 
@@ -161,6 +163,26 @@ FecDecoderBase::remove_decoder(uint16_t sequence) {
     m_received_data_packets += num_data_packets;
     m_expected_data_packets += decoder->n;
     m_recovered_packets     += num_recovered_packets;
+
+    std::set<int32_t> packets;
+    packets.insert(decoder->data_packets.begin(), decoder->data_packets.end());
+    packets.insert(decoder->red_packets.begin(), decoder->red_packets.end());
+
+    assert(!packets.empty());
+
+    auto it = packets.begin();
+    int32_t prev = *it++;
+
+    for (; it != packets.end(); ++it) {
+        auto curr = *it;
+        auto gap  = curr - prev - 1;
+
+        if (gap > 0 && gap <= kMaxContLossCount) {
+            ++m_loss_distribution[gap];
+        }
+
+        prev = curr;
+    }
 
     delete decoder;
     m_seq_decoders.erase(sequence);

@@ -9,7 +9,10 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <iomanip>
+#include <numeric>
 #include <fstream>
+#include <sstream>
 #include <windows.h>
 
 namespace TEST2 {
@@ -44,7 +47,16 @@ public:
         m_decoder = nullptr;
 
         std::cerr << "stats -- packet lossrate: " << (stats.lossrate * 100)
-            << "%, effective packet lossrate: " << (stats.effective_lossrate * 100) << "%, missing groups: " << stats.missing_groups << std::endl;
+                  << "%, effective packet lossrate: " << (stats.effective_lossrate * 100) << "%, missing groups: " << stats.missing_groups << std::endl;
+
+        auto total_losses = std::accumulate(stats.loss_dist, stats.loss_dist + std::size(stats.loss_dist), 0LL);
+        std::ostringstream os;
+        for (int i = 0; i < sizeof(stats.loss_dist) / sizeof(stats.loss_dist[0]); ++i) {
+            if (stats.loss_dist[i] > 0) {
+                os << std::setw(2) << i << ": " << stats.loss_dist[i] << " (" << std::setprecision(2) << stats.loss_dist[i] * 100. / total_losses << "%)" << std::endl;
+            }
+        }
+        std::cerr << "loss distributions: \n" << os.str() << std::endl;
 #if 0
         int constructed_frames = 0;
         for (auto& sequence_frames : m_frames) {
