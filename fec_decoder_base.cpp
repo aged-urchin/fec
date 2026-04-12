@@ -170,10 +170,8 @@ FecDecoderBase::remove_decoder(uint16_t sequence) {
 
     assert(!packets.empty());
 
-    auto it = packets.begin();
-    int32_t prev = *it++;
-
-    for (; it != packets.end(); ++it) {
+    int32_t prev = 0; ///< block index should start from 0
+    for (auto it = packets.begin(); it != packets.end(); ++it) {
         auto curr = *it;
         auto gap  = curr - prev - 1;
 
