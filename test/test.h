@@ -16,32 +16,17 @@
 
 namespace TEST {
 
-#define USE_RANDOM_FILE false
 RandomLossTool traffic(LossRateType::LOSS_30_PERCENT);
 
 const int kFecParamS = 1024;
 const int kFecParamN = 10;
 const int kFecParamK = 10;
 
-FILE* random_in = nullptr, * recv_block = nullptr;
-std::vector<int32_t> random_numbers_in;
-
 class Foo : public IFecEncoderObserver,
             public IFecDecoderObserver {
 public:
     void start(const char* name) {
         m_out_file = fopen(name, "wb");
-
-        random_in = fopen("./test/random_in.txt", "w");
-        recv_block = fopen("./test/recv_block.txt", "w");
-#if USE_RANDOM_FILE
-        std::ifstream file("./read_random.txt");
-        std::string line;
-
-        while (std::getline(file, line)) {
-            random_numbers_in.push_back(std::stoi(line));
-        }
-#endif
 
         m_encoder = create_fec_encoder(this);
         m_decoder = create_fec_decoder(this);
@@ -96,13 +81,7 @@ public:
 
 private:
     void on_encoder_output(IFecEncoder* encoder, IFecPacket* packet) override {
-        static int out_packets = 0;
-        ++out_packets;
-#if USE_RANDOM_FILE
-        if (random_numbers_in.end() != std::find(random_numbers_in.begin(), random_numbers_in.end(), out_packets)) {
-#else
         if (!traffic.is_packet_lost()) {
-#endif
             m_decoder->decode((uint8_t*)packet->get_packet_buffer(), packet->get_packet_buffer_size());
         }
     }
