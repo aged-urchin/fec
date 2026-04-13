@@ -43,6 +43,8 @@ protected:
     void on_block_decoded(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len);
 
 private:
+    void collect_stats(uint16_t sequence);
+
     void remove_decoder(uint16_t sequence);
 
 private:
@@ -59,7 +61,7 @@ private:
         BandFecDecoder*         decoder{ nullptr };
     };
 
-    int64_t                             m_max_packet_lifetime_ms{ INT64_MAX /*3000*/ };
+    int64_t                             m_max_packet_lifetime_ms{ 3000 };
     int32_t                             m_max_forward_packets{ 3 };
 
     int64_t                             m_received_data_packets{ 0 };

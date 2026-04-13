@@ -5,6 +5,7 @@
 #include "./utils/timeutils.h"
 
 #include <iostream>
+#include <sstream>
 #include <cassert>
 #include <set>
 
@@ -144,25 +145,45 @@ FecDecoderBase::send_frame(uint16_t sequence_number, uint16_t frame_number, cons
 }
 
 void
-FecDecoderBase::remove_decoder(uint16_t sequence) {
-    if (0 == m_seq_decoders.count(sequence)) {
-        return;
-    }
-
+FecDecoderBase::collect_stats(uint16_t sequence) {
     auto decoder = m_seq_decoders[sequence];
 
-    flush_bandfec_decoder(decoder->decoder);
-    destroy_bandfec_decoder(decoder->decoder);
-
-    auto num_data_packets      = decoder->data_packets.size();
+    auto num_data_packets = decoder->data_packets.size();
+    auto num_red_packets = decoder->red_packets.size();
     auto num_recovered_packets = decoder->recovered_packets;
 
     assert(decoder->n >= num_data_packets); ///<!!! no retransmission of fec blocks
     assert(decoder->n >= num_data_packets + num_recovered_packets);
 
+    std::ostringstream data_str, red_str;
+
+    data_str << "recv: " << num_data_packets << " (";
+    for (auto& id : decoder->data_packets) {
+        data_str << id << " ";
+    }
+    data_str << ")";
+
+    red_str << "red: " << num_red_packets << " (";
+    for (auto& id : decoder->red_packets) {
+        red_str << id << " ";
+    }
+    red_str << ")";
+
+    auto intact = decoder->n == num_data_packets + num_recovered_packets;
+
+    assert(!intact || (num_data_packets + num_red_packets >= decoder->n));
+    if (!intact && num_data_packets + num_red_packets >= decoder->n) {
+        std::cerr << "maybe RS code could recover this group(" << sequence << ")!" << std::endl;
+    }
+
+    std::cerr << "finish sequence: " << sequence << "(n: " << decoder->n << ", k: " << decoder->k << ")"
+              << ", " << data_str.str() << ", " << red_str.str()
+              << ", recovered: " << num_recovered_packets << ", lost: " << decoder->n - num_data_packets - num_recovered_packets
+              << ", intact: " << std::boolalpha << intact << std::endl;
+
     m_received_data_packets += num_data_packets;
     m_expected_data_packets += decoder->n;
-    m_recovered_packets     += num_recovered_packets;
+    m_recovered_packets += num_recovered_packets;
 
     std::set<int32_t> packets;
     packets.insert(decoder->data_packets.begin(), decoder->data_packets.end());
@@ -173,7 +194,7 @@ FecDecoderBase::remove_decoder(uint16_t sequence) {
     int32_t prev = 0; ///< block index should start from 0
     for (auto it = packets.begin(); it != packets.end(); ++it) {
         auto curr = *it;
-        auto gap  = curr - prev - 1;
+        auto gap = curr - prev - 1;
 
         if (gap > 0 && gap <= kMaxContLossCount) {
             ++m_loss_distribution[gap];
@@ -181,6 +202,20 @@ FecDecoderBase::remove_decoder(uint16_t sequence) {
 
         prev = curr;
     }
+}
+
+void
+FecDecoderBase::remove_decoder(uint16_t sequence) {
+    if (0 == m_seq_decoders.count(sequence)) {
+        return;
+    }
+
+    auto decoder = m_seq_decoders[sequence];
+
+    flush_bandfec_decoder(decoder->decoder);
+    destroy_bandfec_decoder(decoder->decoder);
+
+    collect_stats(sequence);
 
     delete decoder;
     m_seq_decoders.erase(sequence);

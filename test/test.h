@@ -21,7 +21,7 @@ RandomLossTool traffic(LossRateType::LOSS_30_PERCENT);
 
 const int kFecParamS = 1024;
 const int kFecParamN = 10;
-const int kFecParamK = 12;
+const int kFecParamK = 10;
 
 FILE* random_in = nullptr, * recv_block = nullptr;
 std::vector<int32_t> random_numbers_in;

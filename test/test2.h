@@ -20,7 +20,7 @@ namespace TEST2 {
 RandomLossTool traffic(LossRateType::LOSS_30_PERCENT);
 
 const int kFecParamN = 10;
-const int kFecParamK = 12;
+const int kFecParamK = 10;
 
 class Foo : public IFecEncoderObserver,
             public IFecDecoderObserver {
