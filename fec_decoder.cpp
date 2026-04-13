@@ -1,11 +1,14 @@
 #include "fec_decoder.h"
+#include "./utils/number_unwrapper.h"
 #include "./utils/utils.h"
+#include "./utils/timeutils.h"
 
 #include <iostream>
 
 FecDecoder::ReconstructedFrame::ReconstructedFrame(int size) {
     if (size > 0) {
         data.resize(size);
+        creation_time = Time::clocktime();
     }
 }
 
@@ -39,6 +42,8 @@ FecDecoder::ReconstructedFrame::push_fragment(int offset, const uint8_t* fragmen
         int slot_end = slot_start + slot.second;
 
         if (offset < slot_end && fragment_end > slot_start) {
+            /**!!! should never reach here, maybe forget to clean old pending frames or lifetime set too long?
+             */
             std::cerr << "slot conflict" << std::endl;
             return false;
         }
@@ -68,10 +73,29 @@ FecDecoder::destroy() {
 }
 
 void
+FecDecoder::clean_old_frames(uint16_t frame_number) {
+    auto now_ms   = Time::clocktime();
+    auto lifetime = get_max_packet_lifetime();
+    auto deadline = now_ms - lifetime;
+
+    for (auto itr = m_pending_frames.begin(); itr != m_pending_frames.end(); ) {
+        if (deadline > itr->second->creation_time ||
+            (NumberUnwrapper<uint16_t>::is_newer_value(frame_number, itr->first) && ((((uint32_t)frame_number + 65536) - itr->first) % 65536) > 300)) {
+            std::cerr << "removing partially assembled frame: " << itr->first
+                      << ", lifetime: " << now_ms - itr->second->creation_time << ", newest frame number is: " << frame_number
+                      << ", total pending frames: " << m_pending_frames.size() << std::endl;
+            itr = m_pending_frames.erase(itr);
+        } else {
+            ++itr;
+        }
+    }
+}
+
+void
 FecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data, int len, bool recovered) {
     auto remaining_data = (uint8_t*)data;
     auto remaining_len  = len;
-
+    
     /** there may be some trailing trivial bytes(with size <= sizeof(FecFragmentHeader))
      */
     while (remaining_len > (int)sizeof(FecFragmentHeader)) {
@@ -92,12 +116,15 @@ FecDecoder::on_new_block(uint16_t sequence, int32_t pos, const uint8_t* data, in
         }
 
         if (0 == m_pending_frames.count(header.frame_number)) {
+            clean_old_frames(header.frame_number);
             m_pending_frames[header.frame_number] = new ReconstructedFrame(header.frame_size);
         }
 
         auto frame = m_pending_frames[header.frame_number];
         auto ret   = frame->push_fragment(header.frag_offset, remaining_data, header.frag_size);
         if (!ret) {
+            std::cout << "pending frames: " << m_pending_frames.size() << ", oldest: " << m_pending_frames.begin()->first << ", newest: "
+                      << m_pending_frames.rbegin()->first << ", current: " << header.frame_number << std::endl;
             return;
         }
 

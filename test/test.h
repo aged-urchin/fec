@@ -9,7 +9,6 @@
 #include <vector>
 #include <string>
 #include <iomanip>
-#include <fstream>
 #include <numeric>
 #include <sstream>
 #include <windows.h>
@@ -30,9 +29,12 @@ public:
 
         m_encoder = create_fec_encoder(this);
         m_decoder = create_fec_decoder(this);
+        //m_decoder->set_max_packet_lifetime(INT64_MAX);
 
         m_encoder->set_block_size(kFecParamS);
         m_encoder->set_red_params(kFecParamN, kFecParamK);
+
+        m_t0 = get_current_ms();
     }
 
     void stop() {
@@ -67,7 +69,10 @@ public:
             }
         }
         fclose(m_out_file);
-        std::cerr << "frame lossrate: " << (m_encoded_frames - constructed_frames) * 100.0 / m_encoded_frames << "%" << std::endl;
+        std::cerr << "total frames: " << m_encoded_frames << ", recv frames: " << constructed_frames
+                  << ", frame lossrate : " << (m_encoded_frames - constructed_frames) * 100.0 / m_encoded_frames << " % " << std::endl;
+
+        std::cerr << "time cost: " << get_current_ms() - m_t0 << "(ms)" << std::endl;
     }
 
     void push_data(const std::vector<uint8_t>& data) {
@@ -80,6 +85,13 @@ public:
     }
 
 private:
+    int64_t get_current_ms() {
+        auto now = std::chrono::system_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+        return ms;
+    }
+
     void on_encoder_output(IFecEncoder* encoder, IFecPacket* packet) override {
         if (!traffic.is_packet_lost()) {
             m_decoder->decode((uint8_t*)packet->get_packet_buffer(), packet->get_packet_buffer_size());
@@ -96,6 +108,7 @@ private:
         std::map<uint16_t, std::vector<uint8_t>> frames;
     };
 
+    int64_t                                 m_t0;
     bool                                    m_new_line{ false };
     IFecEncoder* m_encoder{ nullptr };
     IFecDecoder* m_decoder{ nullptr };

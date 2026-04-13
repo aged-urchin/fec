@@ -11,12 +11,15 @@ public:
     void destroy();
 
 private:
+    void clean_old_frames(uint16_t frame_number);
+
     void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len, bool recovered) override;
 
 private:
     struct ReconstructedFrame {
         std::vector<uint8_t>    data;
         std::map<int, int>      slots;
+        int64_t                 creation_time;
 
         ReconstructedFrame(int size);
 

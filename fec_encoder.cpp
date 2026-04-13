@@ -26,6 +26,8 @@ FecEncoder::do_encode(const uint8_t* data, int data_len) {
     header.frag_offset  = 0;
     header.frag_size    = 0;
 
+    /**!!! one frame might span multiply groups(encoders)
+     */
     while (src_size > 0) {
         if (!m_encoder && !(m_encoder = create_encoder())) {
             std::cerr << "could not create encoder" << std::endl;
