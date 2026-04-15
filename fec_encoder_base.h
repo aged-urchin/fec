@@ -65,6 +65,7 @@ private:
     };
 
     bool                        m_flushed{ false };
+    bool                        m_first_block{ true };
     uint16_t                    m_sequence_number{ kFristSeqNum };
     IFecEncoderObserver*        m_observer{ nullptr };
 

@@ -23,7 +23,67 @@ on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t 
 
 FecDecoderBase::FecDecoderBase(IFecDecoderObserver* observer) :
 m_observer(observer) {
-    memset(m_loss_distribution, 0, sizeof(m_loss_distribution));
+
+}
+
+void
+FecDecoderBase::Decoder::collect_stats(uint16_t sequence, Stats& stats) {
+    auto num_data_packets      = data_packets.size();
+    auto num_red_packets       = red_packets.size();
+    auto num_recovered_packets = recovered_packets;
+
+    assert(n >= num_data_packets); ///<!!! no retransmission of fec blocks
+    assert(n >= num_data_packets + num_recovered_packets);
+
+    std::set<int32_t> packets;
+    packets.insert(data_packets.begin(), data_packets.end());
+    packets.insert(red_packets.begin(), red_packets.end());
+
+    assert(!packets.empty());
+    /** update stats
+     */
+    int32_t prev = kFirstBlockIndex;
+    for (auto it = packets.begin(); it != packets.end(); ++it) {
+        auto curr = *it;
+        auto gap  = curr - prev - 1;
+
+        if (gap > 0 && gap <= kMaxContLossCount) {
+            ++stats.loss_distribution[gap];
+        }
+
+        prev = curr;
+    }
+
+    stats.expected_data_packets = n;
+    stats.received_data_packets = num_data_packets;
+    stats.recovered_packets     = num_recovered_packets;
+    /** logs
+     */
+    std::ostringstream data_str, red_str;
+
+    data_str << "recv: " << num_data_packets << " (";
+    for (auto& id : data_packets) {
+        data_str << id << " ";
+    }
+    data_str << ")";
+
+    red_str << "red: " << num_red_packets << " (";
+    for (auto& id : red_packets) {
+        red_str << id << " ";
+    }
+    red_str << ")";
+
+    auto intact = n == (int)(num_data_packets + num_recovered_packets);
+    assert(!intact || ((int)(num_data_packets + num_red_packets) >= n));
+
+    if (!intact && (int)(num_data_packets + num_red_packets) >= n) {
+        std::cerr << "maybe RS code could recover this group(" << sequence << ")!" << std::endl;
+    }
+
+    std::cerr << "finish sequence: " << sequence << "(n: " << n << ", k: " << k << ")"
+              << ", " << data_str.str() << ", " << red_str.str()
+              << ", recovered: " << num_recovered_packets << ", lost: " << n - num_data_packets - num_recovered_packets
+              << ", intact: " << std::boolalpha << intact << std::endl;
 }
 
 FecDecoderBase::~FecDecoderBase() {
@@ -40,6 +100,12 @@ void
 FecDecoderBase::set_max_packet_lifetime(const int64_t max_lifetime_ms) {
     m_max_packet_lifetime_ms = max_lifetime_ms;
     std::cerr << "max packet lifetime changed to " << max_lifetime_ms << std::endl;
+}
+
+void
+FecDecoderBase::set_stats_window_size(const int32_t wnd_ms) {
+    m_stat_window_ms = (std::min)(wnd_ms, (int32_t)kMaxStatWindowMs);
+    std::cerr << "set stat window to " << m_stat_window_ms << std::endl;
 }
 
 void
@@ -69,7 +135,7 @@ FecDecoderBase::decode(const uint8_t* data, int len) {
 
         if (NumberUnwrapper<uint16_t>::is_newer_value(header->sequence_number, m_latest_sequence_num)) {
             m_latest_sequence_num = header->sequence_number;
-            m_missing_groups += ((((uint32_t)header->sequence_number + 65536) - m_latest_sequence_num) % 65536);
+            decoder->missing_groups = ((((uint32_t)header->sequence_number + 65536) - m_latest_sequence_num) % 65536);
         } else {
             std::cerr << "new sequence(" << header->sequence_number << ") is later than latest(" << m_latest_sequence_num << ")" << std::endl;
         }
@@ -83,11 +149,29 @@ FecDecoderBase::decode(const uint8_t* data, int len) {
 
 void
 FecDecoderBase::loss_stats(PacketLossStats& stats) {
-    stats.lossrate           = (m_expected_data_packets - m_received_data_packets) * 1. / m_expected_data_packets;
-    stats.effective_lossrate = (m_expected_data_packets - m_received_data_packets - m_recovered_packets) * 1. / m_expected_data_packets;
-    stats.missing_groups     = m_missing_groups;
+    int64_t received_data_packets{ 0 }, expected_data_packets{ 0 }, recovered_packets{ 0 }, missing_groups{ 0 };
+    int32_t loss_distribution[kMaxContLossCount + 1]{ 0 };
 
-    memcpy(stats.loss_dist, m_loss_distribution, sizeof(m_loss_distribution));
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        for (auto& stat : m_recent_stats) {
+            expected_data_packets += stat.second.expected_data_packets;
+            received_data_packets += stat.second.received_data_packets;
+            recovered_packets     += stat.second.recovered_packets;
+            missing_groups        += stat.second.missing_groups;
+
+            for (int i = 0; i < (int)(sizeof(loss_distribution) / sizeof(loss_distribution[0])); ++i) {
+                loss_distribution[i] += stat.second.loss_distribution[i];
+            }
+        }
+    }
+
+    stats.lossrate           = (expected_data_packets - received_data_packets) * 1. / expected_data_packets;
+    stats.effective_lossrate = (expected_data_packets - received_data_packets - recovered_packets) * 1. / expected_data_packets;
+    stats.missing_groups     = missing_groups;
+
+    memcpy(stats.loss_dist, loss_distribution, sizeof(loss_distribution));
 }
 
 int64_t
@@ -148,60 +232,29 @@ void
 FecDecoderBase::collect_stats(uint16_t sequence) {
     auto decoder = m_seq_decoders[sequence];
 
-    auto num_data_packets = decoder->data_packets.size();
-    auto num_red_packets = decoder->red_packets.size();
-    auto num_recovered_packets = decoder->recovered_packets;
+    Stats stats;
+    decoder->collect_stats(sequence, stats);
 
-    assert(decoder->n >= num_data_packets); ///<!!! no retransmission of fec blocks
-    assert(decoder->n >= num_data_packets + num_recovered_packets);
+    auto now_ms = Time::clocktime();
 
-    std::ostringstream data_str, red_str;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-    data_str << "recv: " << num_data_packets << " (";
-    for (auto& id : decoder->data_packets) {
-        data_str << id << " ";
-    }
-    data_str << ")";
+        m_recent_stats[now_ms] = stats;
 
-    red_str << "red: " << num_red_packets << " (";
-    for (auto& id : decoder->red_packets) {
-        red_str << id << " ";
-    }
-    red_str << ")";
+        while (!m_recent_stats.empty()) {
+            auto first_stat = m_recent_stats.begin();
+            if (now_ms - first_stat->first < m_stat_window_ms) {
+                break;
+            }
 
-    auto intact = decoder->n == num_data_packets + num_recovered_packets;
-
-    assert(!intact || (num_data_packets + num_red_packets >= decoder->n));
-    if (!intact && num_data_packets + num_red_packets >= decoder->n) {
-        std::cerr << "maybe RS code could recover this group(" << sequence << ")!" << std::endl;
-    }
-
-    std::cerr << "finish sequence: " << sequence << "(n: " << decoder->n << ", k: " << decoder->k << ")"
-              << ", " << data_str.str() << ", " << red_str.str()
-              << ", recovered: " << num_recovered_packets << ", lost: " << decoder->n - num_data_packets - num_recovered_packets
-              << ", intact: " << std::boolalpha << intact << std::endl;
-
-    m_received_data_packets += num_data_packets;
-    m_expected_data_packets += decoder->n;
-    m_recovered_packets += num_recovered_packets;
-
-    std::set<int32_t> packets;
-    packets.insert(decoder->data_packets.begin(), decoder->data_packets.end());
-    packets.insert(decoder->red_packets.begin(), decoder->red_packets.end());
-
-    assert(!packets.empty());
-
-    int32_t prev = 0; ///< block index should start from 0
-    for (auto it = packets.begin(); it != packets.end(); ++it) {
-        auto curr = *it;
-        auto gap = curr - prev - 1;
-
-        if (gap > 0 && gap <= kMaxContLossCount) {
-            ++m_loss_distribution[gap];
+            m_recent_stats.erase(first_stat);
         }
-
-        prev = curr;
     }
+
+    m_global_stats.expected_data_packets += stats.expected_data_packets;
+    m_global_stats.received_data_packets += stats.received_data_packets;
+    m_global_stats.recovered_packets     += stats.recovered_packets;
 }
 
 void

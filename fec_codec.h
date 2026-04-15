@@ -10,7 +10,7 @@ enum FecExtType {
     kFecExtRtp  = 1,
 };
 
-enum { kFristSeqNum = 0 };
+enum { kFristSeqNum = 0, kFirstBlockIndex = 0 };
 enum { kMaxContLossCount = 64 };
 enum { kRtpFecExtOneByteSizeMax = 127, kRtpFecExtTwoByteSizeMax = 32767 };
 
@@ -265,6 +265,10 @@ public:
      *  (default is 3000ms)
      */
     virtual void set_max_packet_lifetime(const int64_t max_lifetime_ms) = 0;
+
+    /** set window size of stats
+     */
+    virtual void set_stats_window_size(const int32_t wnd_ms) = 0;
 
     /** decode one fec packet (e.g. from an udp socket)
      */

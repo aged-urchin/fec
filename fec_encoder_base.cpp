@@ -90,7 +90,9 @@ FecEncoderBase::create_encoder() {
         }
 
         m_active_config = m_config;
+        m_first_block   = true;
     }
+
     return encoder;
 }
 
@@ -133,6 +135,14 @@ FecEncoderBase::do_set_red_params(int blocks_in_group, int red_blocks_in_group) 
 
 void
 FecEncoderBase::on_new_block(uint16_t sequence, bool red, const uint8_t* data, int len) {
+    if (m_first_block) {
+        BandFecHeaderType bandfec_header;
+        bandfec_parse_block((void*)data, len, bandfec_header);
+
+        assert(0 == bandfec_header.i);
+        m_first_block = false;
+    }
+
     auto header = make_fec_header(sequence, red);
     if (!header) {
         return;

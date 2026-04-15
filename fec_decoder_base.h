@@ -5,6 +5,7 @@
 
 #include <map>
 #include <vector>
+#include <mutex>
 
 struct BandFecHeaderType;
 struct BandFecDecoder;
@@ -18,6 +19,8 @@ public:
     void set_max_forward_packets(int size) override;
 
     void set_max_packet_lifetime(const int64_t max_lifetime_ms) override;
+
+    void set_stats_window_size(const int32_t wnd_ms) override;
 
     void decode(const uint8_t* data, int len) override;
 
@@ -50,6 +53,14 @@ private:
 private:
     friend void on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2);
 
+    struct Stats {
+        int64_t                 received_data_packets{ 0 };
+        int64_t                 expected_data_packets{ 0 };
+        int64_t                 recovered_packets{ 0 };
+        int64_t                 missing_groups{ 0 };
+        int32_t                 loss_distribution[kMaxContLossCount + 1]{ 0 };
+    };
+
     struct Decoder {
         int32_t                 n;
         int32_t                 k;
@@ -58,21 +69,26 @@ private:
         std::vector<int32_t>    data_packets;
         std::vector<int32_t>    red_packets;
         int32_t                 recovered_packets{ 0 };
+        int64_t                 missing_groups{ 0 };
         BandFecDecoder*         decoder{ nullptr };
+
+        void collect_stats(uint16_t sequence, Stats& stats);
     };
+
+    enum { kMaxStatWindowMs = 3'600'000 };
 
     int64_t                             m_max_packet_lifetime_ms{ 3000 };
     int32_t                             m_max_forward_packets{ 3 };
+    int32_t                             m_stat_window_ms{ 3000 };
 
-    int64_t                             m_received_data_packets{ 0 };
-    int64_t                             m_expected_data_packets{ 0 };
-    int64_t                             m_recovered_packets{ 0 };
-    int64_t                             m_missing_groups{ 0 };
-    int32_t                             m_loss_distribution[kMaxContLossCount + 1];
+    Stats                               m_global_stats;
+    std::map<int64_t, Stats>            m_recent_stats;
 
     uint16_t                            m_latest_sequence_num{ 0 };
     IFecDecoderObserver*                m_observer;
     std::map<uint16_t, Decoder*>        m_seq_decoders;   ///< FecHeader::sequence_number
+
+    std::mutex                          m_mutex;
 };
 
 #endif ///< ___FEC_DECODRE_BASE_H___
