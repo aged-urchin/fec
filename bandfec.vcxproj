@@ -146,6 +146,7 @@
     <ClInclude Include="fec_packet.h" />
     <ClInclude Include="test\test.h" />
     <ClInclude Include="test\test2.h" />
+    <ClInclude Include="test\test3.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

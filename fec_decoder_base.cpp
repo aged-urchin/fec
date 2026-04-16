@@ -28,8 +28,8 @@ m_observer(observer) {
 
 void
 FecDecoderBase::Decoder::collect_stats(uint16_t sequence, Stats& stats) {
-    auto num_data_packets      = data_packets.size();
-    auto num_red_packets       = red_packets.size();
+    auto num_data_packets      = (int32_t)data_packets.size();
+    auto num_red_packets       = (int32_t)red_packets.size();
     auto num_recovered_packets = recovered_packets;
 
     assert(n >= num_data_packets); ///<!!! no retransmission of fec blocks
@@ -167,8 +167,8 @@ FecDecoderBase::loss_stats(PacketLossStats& stats) {
         }
     }
 
-    stats.lossrate           = (expected_data_packets - received_data_packets) * 1. / expected_data_packets;
-    stats.effective_lossrate = (expected_data_packets - received_data_packets - recovered_packets) * 1. / expected_data_packets;
+    stats.lossrate           = (expected_data_packets - received_data_packets) * 1.f / expected_data_packets;
+    stats.effective_lossrate = (expected_data_packets - received_data_packets - recovered_packets) * 1.f / expected_data_packets;
     stats.missing_groups     = missing_groups;
 
     memcpy(stats.loss_dist, loss_distribution, sizeof(loss_distribution));
@@ -207,14 +207,14 @@ FecDecoderBase::decode_fec_block(uint16_t sequence_number, const BandFecHeaderTy
     auto decoder = m_seq_decoders[sequence_number];
 
     if (red) {
-        assert(bandfec_header->i >= decoder->n);
-        assert(bandfec_header->i < decoder->n + decoder->k);
-        assert(decoder->red_packets.size() < decoder->k);
+        assert((int32_t)bandfec_header->i >= decoder->n);
+        assert((int32_t)bandfec_header->i < decoder->n + decoder->k);
+        assert((int32_t)decoder->red_packets.size() < decoder->k);
 
         decoder->red_packets.push_back(bandfec_header->i);
     } else {
-        assert(bandfec_header->i < decoder->n);
-        assert(decoder->data_packets.size() < decoder->n);
+        assert((int32_t)bandfec_header->i < decoder->n);
+        assert((int32_t)decoder->data_packets.size() < decoder->n);
 
         decoder->data_packets.push_back(bandfec_header->i);
     }

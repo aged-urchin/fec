@@ -1,5 +1,6 @@
-#include "./test.h"
-#include "./test2.h"
+#include "test.h"
+#include "test2.h"
+#include "test3.h"
 
 int main() {
     system("chcp 65001");
