@@ -1,7 +1,7 @@
 #ifndef ___TEST2_H___
 #define ___TEST2_H___
 
-#include "./network_conditioner.h"
+#include "network_conditioner.h"
 #include "../fec_codec.h"
 #include "../utils/utils.h"
 
@@ -11,14 +11,16 @@
 #include <string>
 #include <iomanip>
 #include <numeric>
-#include <fstream>
 #include <sstream>
 #include <windows.h>
 
 namespace TEST2 {
 
+#define TEST_DECODER_API2 true
+
 RandomLossTool traffic(LossRateType::LOSS_30_PERCENT);
 
+const FecType kFecType = kFecTypeBand;
 const int kFecParamN = 10;
 const int kFecParamK = 10;
 
@@ -26,28 +28,37 @@ class Foo : public IFecEncoderObserver,
             public IFecDecoderObserver {
 public:
     void start(const char* name) {
+        printf("=======================TEST2========================\n");
         m_out_file = fopen(name, "wb");
 
-        m_encoder = create_fec_encoder2(this);
-        m_decoder = create_fec_decoder2(this);
-
+        m_encoder = create_fec_encoder(kFecType, kFecModeSoftRtp, this);
+#if TEST_DECODER_API2
+        m_decoder = create_fec_decoder2(kFecType, kFecModeSoftRtp, this);
+#else
+        m_decoder = create_fec_decoder(this);
+#endif
         m_encoder->set_red_params(kFecParamN, kFecParamK);
+        m_t0 = get_current_ms();
     }
 
     void stop() {
         if (m_encoder) {
             m_encoder->flush();
 
-            destroy_fec_encoder2(m_encoder);
+            destroy_fec_encoder(m_encoder);
             m_encoder = nullptr;
         }
 
         PacketLossStats stats;
-        destroy_fec_decoder2(m_decoder, stats);
+#if TEST_DECODER_API2
+        destroy_fec_decoder2(m_decoder, &stats);
+#else
+        destroy_fec_decoder(m_decoder, &stats);
+#endif
         m_decoder = nullptr;
 
-        std::cerr << "stats -- packet lossrate: " << (stats.lossrate * 100)
-                  << "%, effective packet lossrate: " << (stats.effective_lossrate * 100) << "%, missing groups: " << stats.missing_groups << std::endl;
+        printf("stats -- packet lossrate: %f%% , effective packet lossrate: %f%%, missing groups: %lld\n",
+                (stats.lossrate * 100), (stats.effective_lossrate * 100), stats.missing_groups);
 
         auto total_losses = std::accumulate(stats.loss_dist, stats.loss_dist + std::size(stats.loss_dist), 0LL);
         std::ostringstream os;
@@ -56,7 +67,8 @@ public:
                 os << std::setw(2) << i << ": " << stats.loss_dist[i] << " (" << std::setprecision(2) << stats.loss_dist[i] * 100. / total_losses << "%)" << std::endl;
             }
         }
-        std::cerr << "loss distributions: \n" << os.str() << std::endl;
+        printf("time cost: %lld(ms)\n", get_current_ms() - m_t0);
+        printf("loss distributions: \n%s\n", os.str().c_str());
 #if 0
         int constructed_frames = 0;
         for (auto& sequence_frames : m_frames) {
@@ -67,11 +79,13 @@ public:
         }
         fclose(m_out_file);
 #endif
-        std::cerr << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
-        std::cerr << "frame lossrate before fec: " << m_total_losts * 100.0 / m_total_packets << "%" << std::endl;
-        std::cerr << "red packets lossrate: " << m_lost_red_packetes * 100.0 / m_total_red_packets << "%" << std::endl;
-        std::cerr << "rtp packets lossrate before fec: " << m_lost_rtp_packets * 100.0 / m_total_rtp_packets << "%" << std::endl;
-        std::cerr << "rtp packets lossrate after fec: " << (m_lost_rtp_packets - m_recovered_rtp_packets) * 100.0 / m_lost_rtp_packets << "%" << std::endl;
+        printf("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
+               "lossrate before fec: %f%%(rtp: %f%%, red: %f%%)\n"
+               "rtp packets lossrate after fec: %f%%\n",
+                m_total_losts * 100.0 / m_total_packets,
+                m_lost_rtp_packets * 100.0 / m_total_rtp_packets,
+                m_lost_red_packetes * 100.0 / m_total_red_packets,
+                (m_lost_rtp_packets - m_recovered_rtp_packets) * 100.0 / m_lost_rtp_packets);
     }
 
     void push_data(const std::vector<uint8_t>& data) {
@@ -131,6 +145,13 @@ private:
         std::cerr << "rtp recovered seq: " << rtp_header.seq << std::endl;
     }
 
+    int64_t get_current_ms() {
+        auto now = std::chrono::system_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+        return ms;
+    }
+
 private:
 
     struct SequenceData {
@@ -154,6 +175,8 @@ private:
     int                                     m_total_rtp_packets{ 0 };
     int                                     m_lost_rtp_packets{ 0 };
     int                                     m_recovered_rtp_packets{ 0 };
+
+    int64_t                                 m_t0;
 };
 
 void test() {

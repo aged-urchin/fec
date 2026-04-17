@@ -11,7 +11,7 @@
 externals/abseil-cpp/build
 externals/boringssl/src/build
 x64/Debug/intermediate
-bandfec
+fec
 *.txt
 *.264
 *.mp4

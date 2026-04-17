@@ -22,7 +22,7 @@
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{de443b97-ff69-4582-b7f2-7b7fc4d9ea0a}</ProjectGuid>
-    <RootNamespace>bandfec</RootNamespace>
+    <RootNamespace>fec</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -123,10 +123,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="bandfec.cpp" />
+    <ClCompile Include="bandfec\bandfec.cpp" />
+    <ClCompile Include="bandfec\bandfec_decoder.cpp" />
+    <ClCompile Include="bandfec\bandfec_encoder.cpp" />
+    <ClCompile Include="cm256\cm256.cpp" />
+    <ClCompile Include="cm256\cm256_decoder.cpp" />
+    <ClCompile Include="cm256\cm256_encoder.cpp" />
+    <ClCompile Include="cm256\gf256.cpp" />
+    <ClCompile Include="cm256\header.cpp" />
     <ClCompile Include="fec_decoder.cpp" />
     <ClCompile Include="fec_decoder2.cpp" />
     <ClCompile Include="fec_decoder_base.cpp" />
+    <ClCompile Include="fec_decoder_proxy.cpp" />
     <ClCompile Include="fec_encoder.cpp" />
     <ClCompile Include="fec_codec.cpp" />
     <ClCompile Include="fec_encoder2.cpp" />
@@ -135,13 +143,22 @@
     <ClCompile Include="test\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="bandfec.h" />
+    <ClInclude Include="bandfec\bandfec.h" />
+    <ClInclude Include="bandfec\bandfec_decoder.h" />
+    <ClInclude Include="bandfec\bandfec_encoder.h" />
+    <ClInclude Include="cm256\cm256.h" />
+    <ClInclude Include="cm256\cm256_decoder.h" />
+    <ClInclude Include="cm256\cm256_encoder.h" />
+    <ClInclude Include="cm256\gf256.h" />
+    <ClInclude Include="cm256\header.h" />
     <ClInclude Include="fec_decoder.h" />
     <ClInclude Include="fec_decoder2.h" />
     <ClInclude Include="fec_decoder_base.h" />
+    <ClInclude Include="fec_decoder_proxy.h" />
     <ClInclude Include="fec_encoder.h" />
     <ClInclude Include="fec_codec.h" />
     <ClInclude Include="fec_encoder2.h" />
+    <ClInclude Include="fec_adapter.h" />
     <ClInclude Include="fec_encoder_base.h" />
     <ClInclude Include="fec_packet.h" />
     <ClInclude Include="test\test.h" />

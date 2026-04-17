@@ -1,19 +1,13 @@
 #include "fec_encoder_base.h"
 #include "fec_packet.h"
-#include "bandfec.h"
+#include "bandfec/bandfec_encoder.h"
+#include "cm256/cm256_encoder.h"
 #include "./utils/utils.h"
 
 #include <iostream>
 
-void
-on_fec_send(BandFecEncoder* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2) {
-    auto encoder  = (FecEncoderBase*)user_data1;
-    auto sequence = (uint16_t)user_data2;
-
-    encoder->on_new_block(sequence, red, (uint8_t*)buf, (int)size);
-}
-
-FecEncoderBase::FecEncoderBase(IFecEncoderObserver* observer) :
+FecEncoderBase::FecEncoderBase(FecType type, IFecEncoderObserver* observer) :
+m_type(type),
 m_observer(observer) {
 
 }
@@ -51,7 +45,7 @@ void
 FecEncoderBase::flush() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    std::cerr << "flushing ..." << std::endl;
+    std::cerr << "flushing..." << std::endl;
     if (m_flushed) {
         std::cerr << "already flushed" << std::endl;
         return;
@@ -59,39 +53,38 @@ FecEncoderBase::flush() {
 
     do_flush();
 
-    if (m_encoder) {
-        destroy_bandfec_encoder(m_encoder);
-        m_encoder = nullptr;
-    }
-
+    destroy_encoder();
     m_flushed = true;
 }
 
-BandFecEncoder*
+IFecEncoderAdapter*
 FecEncoderBase::create_encoder() {
+    IFecEncoderAdapter* encoder = nullptr;
     if (!m_observer ||
         0 == m_config.block_size || 0 == m_config.blocks || 0 == m_config.red_blocks) {
         std::cerr << "observer or param not set" << std::endl;
         return nullptr;
     }
 
-    auto encoder =
-        create_bandfec_encoder(m_config.block_size,
-                               m_config.blocks,
-                               m_config.red_blocks,
-                               kFecParamW,
-                               kFecParamG,
-                               &on_fec_send,
-                               (int64_t)this,
-                               m_sequence_number++); ///< kFirstSeqNum, kFirstSeqNum + 1, ...
-    if (encoder) {
-        if (!m_active_config.is_equal(m_config)) {
-            std::cerr << "active config changed to " << m_config.to_string() << std::endl;
-        }
-
-        m_active_config = m_config;
-        m_first_block   = true;
+    if (kFecTypeBand == m_type) {
+        encoder = new(std::nothrow) BandFecEncoder();
+    } else if (kFecTypeRS == m_type) {
+        encoder = new(std::nothrow) CM256Encoder();
     }
+
+    if (!encoder || !encoder->create(m_config, m_sequence_number++, this)) {
+        std::cerr << "could not create encoder adapter" << std::endl;
+
+        delete encoder;
+        return nullptr;
+    }
+
+    if (!m_active_config.is_equal(m_config)) {
+        std::cerr << "active config changed to " << m_config.to_string() << std::endl;
+    }
+
+    m_active_config = m_config;
+    m_first_block   = true;
 
     return encoder;
 }
@@ -99,14 +92,16 @@ FecEncoderBase::create_encoder() {
 void
 FecEncoderBase::destroy_encoder() {
     if (m_encoder) {
-        destroy_bandfec_encoder(m_encoder);
+        m_encoder->destroy();
+
+        delete m_encoder;
         m_encoder = nullptr;
     }
 }
 
 bool
 FecEncoderBase::do_set_block_size(int size_in_bytes) {
-    auto alignment    = 4 * kFecParamG;
+    auto alignment    = 16; ///< actually bandfec requires alignment on '4 * kFecParamG', while 'cm256' has no requirements
     auto aligned_size = (size_in_bytes + alignment - 1) & ~(alignment - 1);
 
     if (aligned_size <= (int)sizeof(FecFragmentHeader)) {
@@ -134,12 +129,9 @@ FecEncoderBase::do_set_red_params(int blocks_in_group, int red_blocks_in_group) 
 }
 
 void
-FecEncoderBase::on_new_block(uint16_t sequence, bool red, const uint8_t* data, int len) {
+FecEncoderBase::on_encoder_output(IFecEncoderAdapter* adapter, uint16_t sequence, int32_t index, bool red, const uint8_t* data, int32_t len) {
     if (m_first_block) {
-        BandFecHeaderType bandfec_header;
-        bandfec_parse_block((void*)data, len, bandfec_header);
-
-        assert(0 == bandfec_header.i);
+        assert(0 == index);
         m_first_block = false;
     }
 

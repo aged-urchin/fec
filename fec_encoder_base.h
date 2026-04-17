@@ -2,14 +2,14 @@
 #define ___FEC_ENCODER_BASE_H___
 
 #include "fec_codec.h"
+#include "fec_adapter.h"
 
 #include <mutex>
-#include <sstream>
 
-struct BandFecEncoder;
-class FecEncoderBase : public IFecEncoder {
+class FecEncoderBase : public IFecEncoder,
+                       public IFecEncoderAdapterObserver {
 public:
-    FecEncoderBase(IFecEncoderObserver* observer);
+    FecEncoderBase(FecType type, IFecEncoderObserver* observer);
 
     ~FecEncoderBase() override;
 
@@ -22,7 +22,7 @@ public:
     void flush() override;
 
 protected:
-    BandFecEncoder* create_encoder();
+    IFecEncoderAdapter* create_encoder();
 
     void destroy_encoder();
 
@@ -37,45 +37,23 @@ protected:
     virtual FecHeader* make_fec_header(uint16_t sequence, bool red) = 0;
 
 private:
-    friend void on_fec_send(BandFecEncoder* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2);
-
-    void on_new_block(uint16_t sequence, bool red, const uint8_t* data, int len);
+    void on_encoder_output(IFecEncoderAdapter* adapter, uint16_t sequence, int32_t index, bool red, const uint8_t* data, int32_t len) override;
 
 private:
 
-    struct Config {
-        int   block_size{ 0 };
-        int   blocks{ 0 };
-        int   red_blocks{ 0 };
-
-        bool is_equal(const Config& config) {
-            return block_size == config.block_size && blocks == config.blocks && red_blocks == config.red_blocks;
-        }
-
-        std::string to_string() {
-            std::ostringstream os;
-            os << "[s: " << block_size << ", n: " << blocks << ", k: " << red_blocks << "]";
-
-            return os.str();
-        }
-    };
-
-    enum {
-        kFecParamW = 40, kFecParamG = 4,
-    };
-
+    IFecEncoderObserver*        m_observer{ nullptr };
     bool                        m_flushed{ false };
     bool                        m_first_block{ true };
     uint16_t                    m_sequence_number{ kFristSeqNum };
-    IFecEncoderObserver*        m_observer{ nullptr };
 
     std::mutex                  m_mutex;
 
 protected:
 
-    Config                      m_config;
-    Config                      m_active_config;
-    BandFecEncoder*             m_encoder{ nullptr };
+    const FecType               m_type;
+    FecConfig                   m_config;
+    FecConfig                   m_active_config;
+    IFecEncoderAdapter*         m_encoder{ nullptr };
 };
 
 #endif ///< ___FEC_ENCODER_BASE_H___

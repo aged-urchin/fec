@@ -6,7 +6,7 @@
 
 class FecEncoder2 : public FecEncoderBase {
 public:
-    FecEncoder2(IFecEncoderObserver* observer);
+    FecEncoder2(FecType type, IFecEncoderObserver* observer);
 
     bool set_red_params(int blocks_in_group, int red_blocks_in_group) override;
 
@@ -23,11 +23,11 @@ private:
 
 private:
 
-    int                               m_max_packet_len{ 0 };
-    uint16_t                          m_base_rtp_sequence_number{ 0 };
-    uint32_t                          m_ssrc{ 0 };
-    std::vector<uint8_t>              m_delta_sizes;
-    std::vector<std::vector<uint8_t>> m_packets;
+    int                                 m_max_packet_len{ 0 };
+    uint16_t                            m_base_rtp_sequence_number{ 0 };
+    uint32_t                            m_ssrc{ 0 };
+    std::vector<uint8_t>                m_delta_sizes;
+    std::vector<std::vector<uint8_t>>   m_packets;
 };
 
 #endif ///< ___FEC_ENCODER2_H___

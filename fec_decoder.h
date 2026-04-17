@@ -6,14 +6,16 @@
 
 class FecDecoder : public FecDecoderBase {
 public:
-    FecDecoder(IFecDecoderObserver* observer);
+    FecDecoder(FecType type, IFecDecoderObserver* observer);
 
-    void destroy();
+    ~FecDecoder() override;
+
+    void destroy(PacketLossStats* stats);
 
 private:
     void clean_old_frames(uint16_t frame_number);
 
-    void on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len, bool recovered) override;
+    void on_new_block(uint16_t sequence_number, int32_t index, const uint8_t* data, int len, bool recovered) override;
 
 private:
     struct ReconstructedFrame {

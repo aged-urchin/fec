@@ -1,5 +1,5 @@
 #include "bandfec.h"
-#include "./utils/utils.h"
+#include "../utils/utils.h"
 
 #include <algorithm>
 
@@ -41,7 +41,7 @@ MAC(int multiplier, int32_t* source, int32_t* dest, int g, int s) {
     }
 }
 
-BandFecEncoder*
+BandFecEnc*
 create_bandfec_encoder(uint16_t     s,
                        uint16_t     n,
                        uint16_t     k,
@@ -73,7 +73,7 @@ create_bandfec_encoder(uint16_t     s,
      *  .-----------------------.
      *
      */
-    auto f = (BandFecEncoder*)malloc(sizeof(BandFecEncoder) + sizeof(BandFecHeaderType) + s * (k + 1));
+    auto f = (BandFecEnc*)malloc(sizeof(BandFecEnc) + sizeof(BandFecHeaderType) + s * (k + 1));
     if (!f) {
         /** out of memory
          */
@@ -128,7 +128,7 @@ add_to_redundant(int32_t* buf, BandFecEncDec* e, int i) {
 }
 
 static void
-send_data(int32_t* buf, BandFecEncoder* f, bool red) {
+send_data(int32_t* buf, BandFecEnc* f, bool red) {
     auto h = (BandFecHeaderType*)(f->e.k * f->e.s + (char*)(f + 1));
     int s = f->e.s + sizeof (*h);
 
@@ -141,7 +141,7 @@ send_data(int32_t* buf, BandFecEncoder* f, bool red) {
 }
 
 void
-bandfec_encode(BandFecEncoder* f, int32_t* buf, bool& done) {
+bandfec_encode(BandFecEnc* f, int32_t* buf, bool& done) {
     done = false;
 
     add_to_redundant(buf, &f->e, f->e.i);
@@ -157,13 +157,13 @@ bandfec_encode(BandFecEncoder* f, int32_t* buf, bool& done) {
 }
 
 void
-destroy_bandfec_encoder(BandFecEncoder* f) {
+destroy_bandfec_encoder(BandFecEnc* f) {
     free(f);
 }
 
-BandFecDecoder*
+BandFecDec*
 create_bandfec_decoder(fec_recv cb_recv, int64_t user_data1, int64_t user_data2) {
-    BandFecDecoder* f = (BandFecDecoder*)malloc(sizeof(*f));
+    BandFecDec* f = (BandFecDec*)malloc(sizeof(*f));
 
     f->user_data1           = user_data1;
     f->user_data2           = user_data2;
@@ -179,7 +179,7 @@ create_bandfec_decoder(fec_recv cb_recv, int64_t user_data1, int64_t user_data2)
 }
 
 void
-bandfec_parse_block(void* buf, size_t size, BandFecHeaderType& header) {
+bandfec_parse_block(void* buf, BandFecHeaderType& header) {
     auto h = (BandFecHeaderType*)buf;
 
     header.s = UINT16_FROM_BE(h->s);
@@ -190,8 +190,8 @@ bandfec_parse_block(void* buf, size_t size, BandFecHeaderType& header) {
     header.i = UINT32_FROM_BE(h->i);
 }
 
-size_t
-bandfec_decode(BandFecDecoder* f, void* buf, size_t size) {
+void
+bandfec_decode(BandFecDec* f, void* buf) {
     auto h = (BandFecHeaderType*)buf;
     int i, must_send = 0, hi = UINT32_FROM_BE(h->i);
 
@@ -207,7 +207,7 @@ bandfec_decode(BandFecDecoder* f, void* buf, size_t size) {
     } else if (UINT16_FROM_BE(h->s) != f->e->s || UINT16_FROM_BE(h->n) != f->e->n || UINT16_FROM_BE(h->k) != f->e->k) {
         /** changing of FEC parameters not supported
          */
-        return 0;
+        return;
     }
 
     /** f->e->i is the one we are expecting
@@ -253,12 +253,10 @@ bandfec_decode(BandFecDecoder* f, void* buf, size_t size) {
             MAC(1, (int32_t*)(h + 1), (int32_t*)(i2redundant (i, f->e->k, f->e->w) * f->e->s + (char*) (f->e + 1)), f->e->g, f->e->s);
         }
     }
-  
-    return size;
 }
 
 void
-flush_bandfec_decoder(BandFecDecoder* f) {
+flush_bandfec_decoder(BandFecDec* f) {
 #define BITS ((int32_t)sizeof(int32_t) * 8) ///< the # of columns stored in each *coef
     struct Temp {
         int start, len, pivotLog, *coef;
@@ -528,7 +526,7 @@ flush_bandfec_decoder(BandFecDecoder* f) {
 }
 
 void
-destroy_bandfec_decoder(BandFecDecoder* f) {
+destroy_bandfec_decoder(BandFecDec* f) {
     if (f) {
         free(f->e);
         free(f);

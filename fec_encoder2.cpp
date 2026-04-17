@@ -1,12 +1,11 @@
 #include "fec_encoder2.h"
-#include "bandfec.h"
 #include "./utils/utils.h"
 
 #include <iostream>
 #include <cassert>
 
-FecEncoder2::FecEncoder2(IFecEncoderObserver* observer) :
-FecEncoderBase(observer) {
+FecEncoder2::FecEncoder2(FecType type, IFecEncoderObserver* observer) :
+FecEncoderBase(type, observer) {
 
 }
 
@@ -37,7 +36,7 @@ FecEncoder2::do_encode(const uint8_t* data, int data_len) {
             return;
         }
 
-        if (data_len > kRtpFecExtTwoByteSizeMax) {
+        if (data_len > kSoftRtpTwoByteSizeMax) {
             std::cerr << "invalid packet size, 'kFecExtRtp' is designed to hold packets of size smaller than 32767" << std::endl;
             do_flush();
             return;
@@ -99,9 +98,9 @@ FecEncoder2::encode_group() {
             auto delta = m_active_config.block_size - (int)packet.size();
 
             assert(delta >= 0);
-            assert(delta <= kRtpFecExtTwoByteSizeMax);
+            assert(delta <= kSoftRtpTwoByteSizeMax);
 
-            if (delta <= kRtpFecExtOneByteSizeMax) {
+            if (delta <= kSoftRtpOneByteSizeMax) {
                 m_delta_sizes.push_back((uint8_t)delta);
             } else {
                 m_delta_sizes.push_back(((uint8_t)(delta >> 8) & 0xff) | 0x80); ///< always big-endian
@@ -115,7 +114,7 @@ FecEncoder2::encode_group() {
             assert((int)packet.size() <= m_active_config.block_size);
 
             packet.resize(m_active_config.block_size);
-            bandfec_encode(m_encoder, (int32_t*)packet.data(), done);
+            m_encoder->encode(packet.data(), done);
         }
 
         assert(done);
@@ -126,8 +125,7 @@ FecEncoder2::encode_group() {
 
 void
 FecEncoder2::reset() {
-    destroy_bandfec_encoder(m_encoder);
-    m_encoder = nullptr;
+    destroy_encoder();
 
     m_base_rtp_sequence_number = 0;
     m_ssrc                     = 0;
@@ -143,14 +141,30 @@ FecEncoder2::make_fec_header(uint16_t sequence, bool red) {
         return nullptr;
     }
 
-    auto header = create_fec_header((int)(sizeof(RtpFecExt) + m_delta_sizes.size() - 1));
-
+    auto header = create_fec_header((int)(sizeof(SoftRtp) + m_delta_sizes.size() - 1));
+    /** bit 0..1
+     */
     header->sig = 0b11; ///< 3
-    header->typ = kFecExtRtp;
+    /** bit 2..3
+     */
+    header->ver = 0;
+    /** bit 4..5
+     */
+    header->typ = kFecTypeBand == m_type ? 0 : 1;
+    /** bit 6..7
+     */
+    header->mod = fec_mode_to_value(kFecModeSoftRtp);
+    /** bit 8
+     */
+    header->red = red ? 1 : 0;
+    /** bit 9..11
+     */
     header->sid = 0;
-    header->red = red;
-
-    header->reserved        = 0;
+    /** bit 12..15
+     */
+    header->rsv = 0;
+    /** bit 16..31
+     */
     header->sequence_number = sequence;
 
     /** should be called within 'bandfec_encode()' (before 'reset()')
@@ -159,7 +173,7 @@ FecEncoder2::make_fec_header(uint16_t sequence, bool red) {
     assert(m_packets.size() <= UINT8_MAX);
     assert(m_active_config.block_size > 0);
 
-    auto rtp_ext = (RtpFecExt*)header->ext;
+    auto rtp_ext = (SoftRtp*)header->ext;
     rtp_ext->base_sequence_num = m_base_rtp_sequence_number;
     rtp_ext->delta_size_bytes  = (uint8_t)m_delta_sizes.size();
 

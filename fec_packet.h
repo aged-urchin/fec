@@ -42,7 +42,7 @@ private:
 
     int header_size(const FecHeader* header) const;
 
-    int ext_size(const FecHeader* header) const;
+    int ext_size(const void* data, int mod) const;
 
     std::vector<uint8_t> header_2_network(const FecHeader* header);
 

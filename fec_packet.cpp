@@ -1,22 +1,21 @@
 #include "fec_packet.h"
 #include "./utils/utils.h"
 
-#include <iostream>
+#include <cstddef>
 #include <cassert>
 
 FecPacket*
 FecPacket::create_instance(const FecHeader* header, const uint8_t* data, int len) {
-    return new FecPacket(header, data, len);
+    return new(std::nothrow) FecPacket(header, data, len);
 }
 
 FecPacket*
 FecPacket::parse_from_buffer(const void* data, int len) {
     if (!is_fec_packet(data, len)) {
-        std::cout << "invalid argument" << std::endl;
         return nullptr;
     }
 
-    return new FecPacket((const uint8_t*)data, len);
+    return new(std::nothrow) FecPacket((const uint8_t*)data, len);
 }
 
 bool
@@ -26,22 +25,43 @@ FecPacket::is_fec_packet(const void* data, int len) {
         return false;
     }
 
-    uint8_t first_byte    = buf[0];
-    uint8_t starting_bits = (first_byte >> 6) & 0x03;
-    uint8_t type          = (first_byte >> 4) & 0x03;
-    uint8_t red           = (first_byte >> 0) & 0x01;
+    uint8_t sig = (buf[0] >> 6) & 0x03; ///< 0..1
+    uint8_t ver = (buf[0] >> 4) & 0x03; ///< 2..3
+    uint8_t typ = (buf[0] >> 2) & 0x03; ///< 4..5
+    uint8_t mod = buf[0] & 0x03;        ///< 6..7
 
-    if (starting_bits != 3) {
-        return false;
-    }
+    uint8_t red           = (buf[1] >> 7) & 0x01; ///< 8
+    uint8_t sid           = (buf[1] >> 4) & 0x07; ///< 9..11
 
-    if (type != 0 && type != 1) {
-        /** kFecExtNull/kFecExtRtp
+    if (sig != 3) {
+        /** not fec
          */
         return false;
     }
 
-    if (1 == type && !red) {
+    if (ver != 0) {
+        /** we only support version 0 for now
+         */
+        return false;
+    }
+
+    if ((typ != 0 && typ != 1) || (mod != 0 && mod != 1)) {
+        /** invalid arguments
+         */
+        return false;
+    }
+
+    if (sid != 0) {
+        /** not supported
+         */
+        return false;
+    }
+
+    /** mod: 0 is kFecModeCompact, 1 is kFecModeSoftRtp
+     */
+    if (1 == mod && !red) {
+        /** encoder only outputs red fec packets under 'kFecModeSoftRtp'
+         */
         return false;
     }
 
@@ -49,7 +69,7 @@ FecPacket::is_fec_packet(const void* data, int len) {
 }
 
 FecPacket::FecPacket(const FecHeader* header, const uint8_t* data, int len) {
-    m_header = create_fec_header(ext_size(header));
+    m_header = create_fec_header(ext_size(header, header->mod));
     std::memcpy(m_header, header, header_size(header));
 
     auto be_header = header_2_network(m_header);
@@ -96,21 +116,24 @@ FecPacket::get_payload_size() const {
 std::vector<uint8_t>
 FecPacket::header_2_network(const FecHeader* header) {
     std::vector<uint8_t> buffer;
-    uint8_t byte0 = 0;
+    uint8_t byte0 = 0, byte1 = 0;
 
     byte0 |= (header->sig & 0x03) << 6;
-    byte0 |= (header->typ & 0x03) << 4;
-    byte0 |= (header->sid & 0x07) << 1;
-    byte0 |= (header->red & 0x01) << 0;
+    byte0 |= (header->ver & 0x03) << 4;
+    byte0 |= (header->typ & 0x03) << 2;
+    byte0 |= (header->mod & 0x03);
+
+    byte1 |= (header->red & 0x01) << 7;
+    byte1 |= (header->sid & 0x07) << 4;
 
     buffer.push_back(byte0);
-    buffer.push_back(header->reserved);
+    buffer.push_back(byte1);
 
     buffer.push_back((uint8_t)(header->sequence_number >> 8) & 0xff);
     buffer.push_back((uint8_t)(header->sequence_number & 0xff));
 
-    if (kFecExtRtp == header->typ) {
-        auto rtp_ext = (RtpFecExt*)header->ext;
+    if (kFecModeSoftRtp == fec_mode_from_value(header->mod)) {
+        auto rtp_ext = (SoftRtp*)header->ext;
 
         buffer.push_back((uint8_t)(rtp_ext->base_sequence_num >> 8) & 0xff);
         buffer.push_back((uint8_t)(rtp_ext->base_sequence_num & 0xff));
@@ -134,25 +157,26 @@ FecPacket::header_from_network(const void* data, int len) {
     auto bytes = (uint8_t*)data;
 
     auto sig = (bytes[0] >> 6) & 0x03;
-    auto typ = (bytes[0] >> 4) & 0x03;
-    auto sid = (bytes[0] >> 1) & 0x07;
-    auto red = (bytes[0] >> 0) & 0x01;
+    auto ver = (bytes[0] >> 4) & 0x03;
+    auto typ = (bytes[0] >> 2) & 0x03;
+    auto mod = (bytes[0] >> 0) & 0x03;
 
-    auto dummy = (FecHeader*)data;
-    dummy->typ = typ;
+    auto red = (bytes[1] >> 7) & 0x01;
+    auto sid = (bytes[1] >> 4) & 0x07;
 
-    auto host_header = create_fec_header(ext_size(dummy));
+    auto host_header = create_fec_header(ext_size(data, mod));
 
     host_header->sig = sig;
+    host_header->ver = ver;
     host_header->typ = typ;
-    host_header->sid = sid;
+    host_header->mod = mod;
     host_header->red = red;
+    host_header->sid = sid;
 
-    host_header->reserved        = bytes[1];
     host_header->sequence_number = UINT16_FROM_BE(*(uint16_t*)&bytes[2]);
 
-    if (kFecExtRtp == host_header->typ) {
-        auto rtp_ext = (RtpFecExt*)host_header->ext;
+    if (kFecModeSoftRtp == fec_mode_from_value(host_header->mod)) {
+        auto rtp_ext = (SoftRtp*)host_header->ext;
 
         rtp_ext->base_sequence_num = UINT16_FROM_BE(*(uint16_t*)&bytes[4]);
         rtp_ext->delta_size_bytes  = bytes[6];
@@ -172,14 +196,16 @@ FecPacket::header_size(const FecHeader* header) const {
         return 0;
     }
 
-    return sizeof(FecHeader) + ext_size(header);
+    return sizeof(FecHeader) + ext_size(header, header->mod);
 }
 
 int
-FecPacket::ext_size(const FecHeader* header) const {
-    if (kFecExtRtp == header->typ) {
-        auto rtp_ext = (RtpFecExt*)header->ext;
-        return sizeof(RtpFecExt) + rtp_ext->delta_size_bytes - 1;
+FecPacket::ext_size(const void* data, int mod) const {
+    if (fec_mode_from_value(mod) == kFecModeSoftRtp) {
+        auto rtp_ext = (SoftRtp*)((uint8_t*)data + offsetof(FecHeader, ext));
+        assert(rtp_ext->delta_size_bytes >= 1);
+
+        return sizeof(SoftRtp) + rtp_ext->delta_size_bytes - 1;
     }
 
     return 0;

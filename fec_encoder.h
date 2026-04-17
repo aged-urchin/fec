@@ -6,7 +6,7 @@
 
 class FecEncoder : public FecEncoderBase {
 public:
-    FecEncoder(IFecEncoderObserver* observer);
+    FecEncoder(FecType type, IFecEncoderObserver* observer);
 
 private:
     void do_encode(const uint8_t* data, int data_len) override;

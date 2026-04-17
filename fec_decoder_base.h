@@ -2,17 +2,16 @@
 #define ___FEC_DECODRE_BASE_H___
 
 #include "fec_codec.h"
+#include "fec_adapter.h"
 
 #include <map>
 #include <vector>
 #include <mutex>
 
-struct BandFecHeaderType;
-struct BandFecDecoder;
-
-class FecDecoderBase : public IFecDecoder {
+class FecDecoderBase : public IFecDecoder,
+                       public IFecDecoderAdapterObserver {
 public:
-    FecDecoderBase(IFecDecoderObserver* observer);
+    FecDecoderBase(FecType type, FecMode mode, IFecDecoderObserver* observer);
 
     ~FecDecoderBase() override;
 
@@ -26,8 +25,10 @@ public:
 
     void loss_stats(PacketLossStats& stats) override;
 
+    FecMode mode() override { return m_mode; }
+
 protected:
-    virtual void on_sequence_start(uint16_t sequence, const FecHeader* header, const BandFecHeaderType* bandfec_header) { }
+    virtual void on_sequence_start(uint16_t sequence, const FecHeader* header, const FecHeaderInfo* header_info) { }
 
     virtual void on_sequence_end(uint16_t sequence) { }
 
@@ -37,29 +38,34 @@ protected:
 
     void maybe_remove_outdated_decoders(int64_t now_ms, int32_t reset_sequence_number = -1);
 
-    void decode_fec_block(uint16_t sequence_number, const BandFecHeaderType* bandfec_header, const void* data, int len, bool red);
+    void decode_fec_block(uint16_t sequence_number, const FecHeaderInfo* header_info, const void* data, int len, bool red);
 
     void send_frame(uint16_t sequence_number, uint16_t frame_number, const uint8_t* data, int data_len);
 
-    void destroy_decoders();
-
-    void on_block_decoded(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len);
+    void destroy_decoders(PacketLossStats* stats);
 
 private:
+    void on_decoder_output(IFecDecoderAdapter* adapter, uint16_t sequence_number, int32_t pos, const uint8_t* data, int32_t len) override;
+
+    FecHeaderInfo get_header_info(const void* block, int32_t size);
+
+    IFecDecoderAdapter* create_decoder(uint16_t sequence);
+
     void collect_stats(uint16_t sequence);
 
     void remove_decoder(uint16_t sequence);
-
-private:
-    friend void on_fec_receive(BandFecDecoder* f, int64_t position, void* buf, int len, int64_t user_data1, int64_t user_data2);
 
     struct Stats {
         int64_t                 received_data_packets{ 0 };
         int64_t                 expected_data_packets{ 0 };
         int64_t                 recovered_packets{ 0 };
         int64_t                 missing_groups{ 0 };
-        int32_t                 loss_distribution[kMaxContLossCount + 1]{ 0 };
+        int64_t                 loss_distribution[kMaxContLossCount + 1]{ 0 };
     };
+
+    void convert_stats(PacketLossStats* packet_stats, const Stats& stats);
+
+private:
 
     struct Decoder {
         int32_t                 n;
@@ -70,13 +76,15 @@ private:
         std::vector<int32_t>    red_packets;
         int32_t                 recovered_packets{ 0 };
         int64_t                 missing_groups{ 0 };
-        BandFecDecoder*         decoder{ nullptr };
+        IFecDecoderAdapter*     decoder{ nullptr };
 
-        void collect_stats(uint16_t sequence, Stats& stats);
+        void collect_stats(uint16_t sequence, Stats& stats, FecType type);
     };
 
     enum { kMaxStatWindowMs = 3'600'000 };
 
+    const FecType                       m_type;
+    const FecMode                       m_mode;
     int64_t                             m_max_packet_lifetime_ms{ 3000 };
     int32_t                             m_max_forward_packets{ 3 };
     int32_t                             m_stat_window_ms{ 3000 };

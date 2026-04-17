@@ -1,23 +1,23 @@
 #include "fec_decoder2.h"
-#include "bandfec.h"
+#include "bandfec/bandfec.h"
 #include "./utils/utils.h"
 #include "./utils/timeutils.h"
 
 #include <iostream>
 #include <cassert>
 
-FecDecoder2::FecGroup::FecGroup(uint16_t sequence, const BandFecHeaderType* header, RtpFecExt* rtp_ext) :
-sequence(sequence),
-bandfec_header(nullptr) {
-    assert(header);
+FecDecoder2::FecGroup::FecGroup(uint16_t sequence, const FecHeaderInfo* info, SoftRtp* rtp_ext) :
+sequence(sequence) {
+    assert(info);
+    assert(info->pack);
     assert(rtp_ext);
-    if (!header || !rtp_ext || rtp_ext->delta_size_bytes <= 0) {
+
+    if (!info || !rtp_ext || rtp_ext->delta_size_bytes <= 0) {
         std::cerr << "invalid arguments" << std::endl;
         return;
     }
 
-    bandfec_header  = new BandFecHeaderType;
-    *bandfec_header = *header;
+    header_info = *info;
 
     auto ptr             = (uint8_t*)rtp_ext->delta_size;
     auto remaining_bytes = (int)rtp_ext->delta_size_bytes;
@@ -37,24 +37,28 @@ bandfec_header(nullptr) {
             delta_size |= *ptr++;
         }
 
-        rtp_packet_sizes[rtp_ext->base_sequence_num++] = bandfec_header->s - delta_size;
+        rtp_packet_sizes[rtp_ext->base_sequence_num++] = header_info.s - delta_size;
 
         remaining_bytes -= (is_one_byte_len ? 1 : 2);
     }
 }
 
 FecDecoder2::FecGroup::~FecGroup() {
-    delete bandfec_header;
+
 }
 
-FecDecoder2::FecDecoder2(IFecDecoderObserver* observer) :
-FecDecoderBase(observer) {
+FecDecoder2::FecDecoder2(FecType type, IFecDecoderObserver* observer) :
+FecDecoderBase(type, kFecModeSoftRtp, observer) {
+
+}
+
+FecDecoder2::~FecDecoder2() {
 
 }
 
 void
-FecDecoder2::destroy() {
-    destroy_decoders();
+FecDecoder2::destroy(PacketLossStats* stats) {
+    destroy_decoders(stats);
 }
 
 void
@@ -153,7 +157,7 @@ void
 FecDecoder2::decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, const void* data, int len) {
     /** construct a fec block and send it to the BandFecDecoder
      */
-    auto header   = *fec_group->bandfec_header;
+    auto header   = fec_group->header_info;
     auto base_seq = fec_group->rtp_packet_sizes.begin()->first;
 
     assert(rtp_sequence >= base_seq);
@@ -162,43 +166,32 @@ FecDecoder2::decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, const 
      */
     header.i = rtp_sequence - base_seq;
 
-    BandFecHeaderType be_header;
-    /** convert 'BandFecHeaderType' from host to network
-     */
-    be_header.s = UINT16_TO_BE(header.s);
-    be_header.n = UINT16_TO_BE(header.n);
-    be_header.k = UINT16_TO_BE(header.k);
-    be_header.i = UINT32_TO_BE(header.i);
-    be_header.w = header.w;
-    be_header.g = header.g;
-
-    std::vector<uint8_t> fec_block;
-    fec_block.insert(fec_block.end(), (char*)&be_header, (char*)&be_header + sizeof(be_header));
+    auto fec_block = header.pack(header);
     fec_block.insert(fec_block.end(), (char*)data, (char*)data + len);
 
-    assert(len <= fec_group->bandfec_header->s);
+    assert(len <= fec_group->header_info.s);
     /** align(padding with 0) on 'BandFecHeaderType::s'
      */
-    fec_block.resize(sizeof(BandFecHeaderType) + fec_group->bandfec_header->s);
+    fec_block.resize(sizeof(BandFecHeaderType) + fec_group->header_info.s);
 
     decode_fec_block(fec_group->sequence, &header, fec_block.data(), (int)fec_block.size(), false);
 }
 
 void
-FecDecoder2::on_sequence_start(uint16_t sequence, const FecHeader* header, const BandFecHeaderType* bandfec_header) {
+FecDecoder2::on_sequence_start(uint16_t sequence, const FecHeader* header, const FecHeaderInfo* info) {
     std::cerr << "sequence " << sequence << " starts" << std::endl;
 
     assert(0 == m_fec_groups.count(sequence));
-    assert(1 == header->typ);
+    assert(kFecModeSoftRtp == fec_mode_from_value(header->mod));
     /** a new group should start with a red packet
      *  which has a 'BandFecHeaderType::i' ranging from 'BandFecHeaderType::n' to 'BandFecHeaderType::n + BandFecHeaderType::k'
      */
     assert(1 == header->red);
-    assert(bandfec_header->i >= bandfec_header->n);
-    assert(bandfec_header->i < (uint32_t)(bandfec_header->n + bandfec_header->k));
+    assert(info->i >= info->n);
+    assert(info->i < (uint32_t)(info->n + info->k));
     
-    auto rtp_ext = (RtpFecExt*)header->ext;
-    m_fec_groups[sequence] = new FecGroup(sequence, bandfec_header, rtp_ext);
+    auto rtp_ext = (SoftRtp*)header->ext;
+    m_fec_groups[sequence] = new(std::nothrow) FecGroup(sequence, info, rtp_ext);
 
     /** check the cached rtp packets upon receiving the first red packet, and start decoding them if they belong to this group
      */
@@ -263,7 +256,7 @@ FecDecoder2::on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* 
     }
 
     assert(pos >= 0);
-    assert(pos < m_fec_groups[sequence_number]->bandfec_header->n);
+    assert(pos < m_fec_groups[sequence_number]->header_info.n);
 
     /** use 'rtp sequence number' as the 2nd param?
      */

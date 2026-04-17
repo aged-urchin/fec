@@ -1,7 +1,7 @@
 #ifndef ___TEST_H___
 #define ___TEST_H___
 
-#include "./network_conditioner.h"
+#include "network_conditioner.h"
 #include "../fec_codec.h"
 
 #include <iostream>
@@ -27,7 +27,7 @@ public:
     void start(const char* name) {
         m_out_file = fopen(name, "wb");
 
-        m_encoder = create_fec_encoder(this);
+        m_encoder = create_fec_encoder(kFecTypeBand, kFecModeCompact, this);
         m_decoder = create_fec_decoder(this);
         //m_decoder->set_max_packet_lifetime(INT64_MAX);
 
@@ -46,11 +46,11 @@ public:
         }
 
         PacketLossStats stats;
-        destroy_fec_decoder(m_decoder, stats);
+        destroy_fec_decoder(m_decoder, &stats);
         m_decoder = nullptr;
 
-        std::cerr << "stats -- packet lossrate: " << (stats.lossrate * 100)
-                  << "%, effective packet lossrate: " << (stats.effective_lossrate * 100) << "%, missing groups: " << stats.missing_groups << std::endl;
+        printf("stats -- packet lossrate: %f%% , effective packet lossrate: %f%%, missing groups: %lld\n",
+               (stats.lossrate * 100), (stats.effective_lossrate * 100), stats.missing_groups);
 
         auto total_losses = std::accumulate(stats.loss_dist, stats.loss_dist + std::size(stats.loss_dist), 0LL);
         std::ostringstream os;
@@ -59,7 +59,8 @@ public:
                 os << std::setw(2) << i << ": " << stats.loss_dist[i] << " (" << std::setprecision(2) << stats.loss_dist[i] * 100. / total_losses << "%)" << std::endl;
             }
         }
-        std::cerr << "loss distributions: \n" << os.str() << std::endl;
+
+        std::cerr << "time cost: " << get_current_ms() - m_t0 << "(ms)" << std::endl;
 
         int constructed_frames = 0;
         for (auto& sequence_frames : m_frames) {
@@ -69,10 +70,11 @@ public:
             }
         }
         fclose(m_out_file);
-        std::cerr << "total frames: " << m_encoded_frames << ", recv frames: " << constructed_frames
-                  << ", frame lossrate : " << (m_encoded_frames - constructed_frames) * 100.0 / m_encoded_frames << " % " << std::endl;
 
-        std::cerr << "time cost: " << get_current_ms() - m_t0 << "(ms)" << std::endl;
+        printf("loss distributions: \n%s\n", os.str().c_str());
+        printf("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
+                "total frames: %d, , recv frames: %d, frame lossrate: %f%%\n",
+                m_encoded_frames, constructed_frames, (m_encoded_frames - constructed_frames) * 100.0 / m_encoded_frames);
     }
 
     void push_data(const std::vector<uint8_t>& data) {
@@ -109,10 +111,9 @@ private:
     };
 
     int64_t                                 m_t0;
-    bool                                    m_new_line{ false };
-    IFecEncoder* m_encoder{ nullptr };
-    IFecDecoder* m_decoder{ nullptr };
-    FILE* m_out_file{ nullptr };
+    IFecEncoder* 							m_encoder{ nullptr };
+    IFecDecoder* 							m_decoder{ nullptr };
+    FILE* 									m_out_file{ nullptr };
     uint16_t                                m_next_frame{ 0 };
     std::map<uint16_t, SequenceData>        m_frames;
     int                                     m_encoded_frames{ 0 };

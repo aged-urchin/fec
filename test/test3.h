@@ -1,7 +1,7 @@
 #ifndef ___TEST3_H___
 #define ___TEST3_H___
 
-#include "./network_conditioner.h"
+#include "network_conditioner.h"
 #include <set>
 
 namespace TEST3 {
@@ -47,8 +47,8 @@ void test() {
         prev = curr;
     }
 
-    std::cout << "lossrate: " << (packets.size() - num_received_packets) * 100.0 / packets.size()
-              << "%, effective loss: " << lost_packets * 100.0 / kTotalDataPackets << "%" << std::endl;
+    printf("lossrate: %f%%, effective loss: %f%%\n",
+            (packets.size() - num_received_packets) * 100.0 / packets.size(), lost_packets * 100.0 / kTotalDataPackets);
 }
 
 }

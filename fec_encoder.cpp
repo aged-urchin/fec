@@ -1,12 +1,11 @@
 #include "fec_encoder.h"
-#include "bandfec.h"
 #include "./utils/utils.h"
 
 #include <iostream>
 #include <cassert>
 
-FecEncoder::FecEncoder(IFecEncoderObserver* observer) :
-FecEncoderBase(observer) {
+FecEncoder::FecEncoder(FecType type, IFecEncoderObserver* observer) :
+FecEncoderBase(type, observer) {
 
 }
 
@@ -45,7 +44,7 @@ FecEncoder::do_encode(const uint8_t* data, int data_len) {
             header.frag_size    = copy_size;
 
             auto be_header = convert_fragment_to_network(&header);
-            /**  .__________________________________________.
+            /**   __________________________________________
              *   |                           |              |
              *   |     FecFragmentHeader     |     data     |
              *   |                           |              |
@@ -72,12 +71,11 @@ FecEncoder::do_encode(const uint8_t* data, int data_len) {
         /** block is full, or remaining space is not enough for another writing: encode this block
          */
         bool done = false;
-        bandfec_encode(m_encoder, (int32_t*)m_block.data(), done);
+        m_encoder->encode(m_block.data(), done);
         m_block.clear();
 
         if (done) {
-            destroy_bandfec_encoder(m_encoder);
-            m_encoder = nullptr;
+            destroy_encoder();
         }
     }
 }
@@ -92,7 +90,7 @@ FecEncoder::do_flush() {
     do {
         m_block.insert(m_block.end(), (uint8_t*)&kEndingFragHeader, (uint8_t*)&kEndingFragHeader + sizeof(FecFragmentHeader));
 
-        bandfec_encode(m_encoder, (int32_t*)m_block.data(), done);
+        m_encoder->encode(m_block.data(), done);
         m_block.clear();
     } while (!done);
 }
@@ -100,13 +98,29 @@ FecEncoder::do_flush() {
 FecHeader*
 FecEncoder::make_fec_header(uint16_t sequence, bool red) {
     auto header = create_fec_header();
-
+    /** bit 0..1
+     */
     header->sig = 0b11; ///< 3
-    header->typ = kFecExtNull;
-    header->sid = 0;
+    /** bit 2..3
+     */
+    header->ver = 0;
+    /** bit 4..5
+     */
+    header->typ = kFecTypeBand == m_type ? 0 : 1;
+    /** bit 6..7
+     */
+    header->mod = fec_mode_to_value(kFecModeCompact);;
+    /** bit 8
+     */
     header->red = red ? 1 : 0;
-
-    header->reserved        = 0;
+    /** bit 9..11
+     */
+    header->sid = 0;
+    /** bit 12..15
+     */
+    header->rsv = 0;
+    /** bit 16..31
+     */
     header->sequence_number = sequence;
 
     return header;

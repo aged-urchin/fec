@@ -3,18 +3,27 @@
 
 #include <cstdint>
 
-/** extension type
+/** fec type
  */
-enum FecExtType {
-    kFecExtNull = 0,
-    kFecExtRtp  = 1,
+enum FecType {
+    kFecTypeNull,
+    kFecTypeBand,
+    kFecTypeRS,
+};
+
+/** fec mode
+ */
+enum FecMode {
+    kFecModeNull,
+    kFecModeCompact,
+    kFecModeSoftRtp,
 };
 
 enum { kFristSeqNum = 0, kFirstBlockIndex = 0 };
 enum { kMaxContLossCount = 64 };
-enum { kRtpFecExtOneByteSizeMax = 127, kRtpFecExtTwoByteSizeMax = 32767 };
+enum { kSoftRtpOneByteSizeMax = 127, kSoftRtpTwoByteSizeMax = 32767 };
 
-/** for 'kFecExtNull':
+/** for 'kFecModeCompact':
  *  protected by fec(e.g. as part of fec payload) and used to reconstruct udp packets from fec packets
  */
 struct FecFragmentHeader {
@@ -24,9 +33,9 @@ struct FecFragmentHeader {
     uint16_t    frag_size;
 };
 
-/** rtp fec extension (with 'FecHeader::typ' == 1)
+/** soft rtp (with 'FecHeader::typ' == 1)
  */
-struct RtpFecExt {
+struct SoftRtp {
     uint16_t  base_sequence_num; ///< the sequence number of the first rtp packet from a series of consecutive rtp packets
     uint8_t   delta_size_bytes;  ///< total bytes 'delta_size' occupies
 
@@ -130,11 +139,14 @@ struct FecHeader {
      *  DTLS:     not specified but should be within range [19, 64]
      */
     uint8_t     sig : 2; ///< signature: must be '11', distinguish from DTLS/STUN/RTP/RTCP
-    uint8_t     typ : 2; ///< type:      header type
-    uint8_t     sid : 3; ///< stream id: identify multiply fec streams
-    uint8_t     red : 1; ///< redundant: 0 for original packet, 1 for redundant packet
+    uint8_t     ver : 2; ///< version:   version number
+    uint8_t     typ : 2; ///< type:      FecType, 0 is kFecTypeBand, 1 is kFecTypeRS
+    uint8_t     mod : 2; ///< mode:      FecMode, 0 is kFecModeCompact, 1 is kFecModeSoftRtp
 
-    uint8_t     reserved;
+    uint8_t     red : 1; ///< redundant: 0 for original packet, 1 for redundant packet
+    uint8_t     sid : 3; ///< stream id: identify multiply fec streams
+    uint8_t     rsv : 4; ///< reserved
+
     uint16_t    sequence_number; ///< ranges from kFristSeqNum, kFristSeqNum + 1, ...
 
     /** variable-length extension field for additional FEC header information
@@ -158,7 +170,7 @@ struct PacketLossStats {
 
 /**  fec packet memory layout
  *
- *   with 'FecHeader::typ' == 0:
+ *   e.g. with 'kFecModeCompact & kFecTypeBand':
  *
  *   |<------------------------ extra header bytes (16 + 8*N bytes) ------------------------>| 
  *   .______________________________________________________________________________________________________________  ~~~  ________________________________________________________.
@@ -172,7 +184,7 @@ struct PacketLossStats {
  *   |<------------------------------------------------------------------------------ packet buffer ------------------------------------------------------------------------------>|
  *
  *
- *   with 'FecHeader::typ' == 1:
+ *   e.g. with 'kFecModeSoftRtp & kFecTypeBand':
  *
  *   |<-------- extra header bytes (12 + N bytes)--------->| 
  *   .______________________________________________________________________________________________________________.
@@ -188,23 +200,26 @@ struct PacketLossStats {
  */
 class IFecPacket {
 public:
+    /** increase a reference to this object
+     */
     virtual unsigned long retain() = 0;
-
+    /** decrease a reference to this object
+     */
     virtual unsigned long release() = 0;
-
+    /** get header(in host byte order)
+     */
     virtual const FecHeader* get_header() const = 0;
-
-    /** get header buffer and data buffer as a whole(e.g. FecHeader + BandFecHeaderType + FecFragmentHeader + protected data),
-     *  with corresponding header fields transformed into network byte order(aka. big-endian)
+    /** get packet buffer(header among which is in network byte order)
      */
     virtual const void* get_packet_buffer() const = 0;
-
+    /** get packet buffer size in bytes
+     */
     virtual uint32_t get_packet_buffer_size() const = 0;
-
-    /** get fec block buffer(e.g. BandFecHeaderType + FecFragmentHeader + protected data)
+    /** get payload(fec block) buffer
      */
     virtual const void* get_payload() const = 0;
-
+    /** get payload size in bytes
+     */
     virtual uint32_t get_payload_size() const = 0;
 
 protected:
@@ -241,8 +256,7 @@ class IFecDecoder;
 class IFecDecoderObserver {
 public:
     virtual ~IFecDecoderObserver() = default;
-
-    /** return one reconstructed frame (e.g. one udp packet for 'kFecExtNull' or one rtp packet for 'kFecExtRtp')
+    /** return one reconstructed frame (e.g. one udp packet for 'kFecModeCompact' or one rtp packet for 'kFecModeSoftRtp')
      */
     virtual void on_decoder_output(IFecDecoder*     decoder,
                                    uint16_t         sequence_number,
@@ -254,35 +268,33 @@ public:
 class IFecDecoder {
 public:
     virtual ~IFecDecoder() = default;
-
     /** set the maximum number of subsequent out-of-order packets
      *  that can be received before forcing completion and processing of the current unfinished data sequence.
      *  (default is 3)
      */
     virtual void set_max_forward_packets(int packets) = 0;
-
     /** set expire time for all pending data(e.g. rtp packets or frames being reconstructed)
      *  (default is 3000ms)
      */
     virtual void set_max_packet_lifetime(const int64_t max_lifetime_ms) = 0;
-
     /** set window size of stats
      */
     virtual void set_stats_window_size(const int32_t wnd_ms) = 0;
-
     /** decode one fec packet (e.g. from an udp socket)
      */
     virtual void decode(const uint8_t* data, int len) = 0;
-
     /** get current packet loss statistics
      */
     virtual void loss_stats(PacketLossStats& stats) = 0;
+    /** get fec mode
+     */
+    virtual FecMode mode() = 0;
 };
 
 /** APIs
  */
 IFecEncoder*
-create_fec_encoder(IFecEncoderObserver* observer);
+create_fec_encoder(FecType type, FecMode mode, IFecEncoderObserver* observer);
 
 void
 destroy_fec_encoder(IFecEncoder* encoder);
@@ -291,20 +303,12 @@ IFecDecoder*
 create_fec_decoder(IFecDecoderObserver* observer);
 
 void
-destroy_fec_decoder(IFecDecoder* decoder, PacketLossStats& stats);
-
-/** APIs for rtp extensions
- */
-IFecEncoder*
-create_fec_encoder2(IFecEncoderObserver* observer);
-
-void
-destroy_fec_encoder2(IFecEncoder* encoder);
+destroy_fec_decoder(IFecDecoder* decoder, PacketLossStats* stats = nullptr);
 
 IFecDecoder*
-create_fec_decoder2(IFecDecoderObserver* observer);
+create_fec_decoder2(FecType type, FecMode mode, IFecDecoderObserver* observer);
 
 void
-destroy_fec_decoder2(IFecDecoder* decoder, PacketLossStats& stats);
+destroy_fec_decoder2(IFecDecoder* decoder, PacketLossStats* stats = nullptr);
 
 #endif ///< ___FEC_CODEC_H___
