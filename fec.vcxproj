@@ -175,6 +175,7 @@
     <ClInclude Include="leopard\leopard_decoder.h" />
     <ClInclude Include="leopard\leopard_encoder.h" />
     <ClInclude Include="leopard\leo_header.h" />
+    <ClInclude Include="test\fec_data_checker.h" />
     <ClInclude Include="test\test.h" />
     <ClInclude Include="test\test2.h" />
     <ClInclude Include="test\test3.h" />

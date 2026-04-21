@@ -4,6 +4,7 @@
 #include "network_conditioner.h"
 #include "../fec_codec.h"
 #include "../utils/utils.h"
+#include "fec_data_checker.h"
 
 #include <iostream>
 #include <map>
@@ -19,6 +20,7 @@ namespace TEST2 {
 #define TEST_DECODER_API2 true
 
 RandomLossTool traffic(LossRateType::LOSS_30_PERCENT);
+FecChecker data_checker;
 
 const FecType kFecType = kFecTypeBand;
 const int kFecParamN = 10;
@@ -27,10 +29,8 @@ const int kFecParamK = 10;
 class Foo : public IFecEncoderObserver,
             public IFecDecoderObserver {
 public:
-    void start(const char* name) {
+    void start() {
         printf("=======================TEST2========================\n");
-        m_out_file = fopen(name, "wb");
-
         m_encoder = create_fec_encoder(kFecType, kFecModeSoftRtp, this);
 #if TEST_DECODER_API2
         m_decoder = create_fec_decoder2(kFecType, kFecModeSoftRtp, this);
@@ -69,16 +69,6 @@ public:
         }
         printf("time cost: %lld(ms)\n", get_current_ms() - m_t0);
         printf("loss distributions: \n%s\n", os.str().c_str());
-#if 0
-        int constructed_frames = 0;
-        for (auto& sequence_frames : m_frames) {
-            for (auto& frame : sequence_frames.second.frames) {
-                ++constructed_frames;
-                fwrite(frame.second.data(), 1, frame.second.size(), m_out_file);
-            }
-        }
-        fclose(m_out_file);
-#endif
         printf("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n"
                "lossrate before fec: %f%%(rtp: %f%%, red: %f%%)\n"
                "rtp packets lossrate after fec: %f%%\n",
@@ -89,10 +79,13 @@ public:
     }
 
     void push_data(const std::vector<uint8_t>& data) {
-        decode(data.data(), (int)data.size(), true);
+        std::vector<uint8_t> crc_data(data.size() + 8);
+        data_checker.add_check(data.data(), data.size(), crc_data.data(), crc_data.size());
+
+        decode(crc_data.data(), crc_data.size(), true);
         ++m_total_rtp_packets;
 
-        m_encoder->encode(data.data(), (int)data.size());
+        m_encoder->encode(crc_data.data(), crc_data.size());
         ++m_encoded_frames;
     }
 
@@ -133,16 +126,28 @@ private:
     }
 
     void on_decoder_output(IFecDecoder* decoder, uint16_t sequence_number, uint16_t frame_number, const uint8_t* data, int len) override {
-        m_frames[sequence_number].frames[frame_number] = { data, data + len };
-
         RtpHeader rtp_header;
         if (!parse_rtp_buffer(data, len, rtp_header)) {
             std::cerr << "output an invalid rtp packet" << std::endl;
             return;
         }
 
-        ++m_recovered_rtp_packets;
         std::cerr << "rtp recovered seq: " << rtp_header.seq << std::endl;
+
+        if (!data_checker.check(data, len)) {
+            assert(0);
+            printf("data check failed\n");
+            return;
+        }
+
+        auto ret = m_recv_packets[sequence_number].insert(frame_number);
+        if (!ret.second) {
+            assert(0);
+            printf("receive duplicat packet\n");
+            return;
+        }
+
+        ++m_recovered_rtp_packets;
     }
 
     int64_t get_current_ms() {
@@ -154,16 +159,10 @@ private:
 
 private:
 
-    struct SequenceData {
-        std::map<uint16_t, std::vector<uint8_t>> frames;
-    };
-
-    bool                                    m_new_line{ false };
     IFecEncoder*                            m_encoder{ nullptr };
     IFecDecoder*                            m_decoder{ nullptr };
-    FILE*                                   m_out_file{ nullptr };
     uint16_t                                m_next_frame{ 0 };
-    std::map<uint16_t, SequenceData>        m_frames;
+
     int                                     m_encoded_frames{ 0 };
 
     int                                     m_total_packets{ 0 };
@@ -175,6 +174,7 @@ private:
     int                                     m_total_rtp_packets{ 0 };
     int                                     m_lost_rtp_packets{ 0 };
     int                                     m_recovered_rtp_packets{ 0 };
+    std::map<uint16_t, std::set<uint16_t>>  m_recv_packets;
 
     int64_t                                 m_t0;
 };
@@ -188,7 +188,7 @@ void test() {
     int in_packets = 0, in_size = 0, progress = -1;
 
     Foo foo;
-    foo.start("./test/recovered.rtp");
+    foo.start();
 
     do {
         uint16_t pkt_len = 0;
@@ -205,15 +205,7 @@ void test() {
 
         foo.push_data(data);
         in_size += (pkt_len + 2);
-#if 0
-        if (in_size / kReadSize % 500 == 0) {
-            static int rnd[] = { 5, 10, 15, 20 };
-            static int idx = 0;
 
-            auto p = rnd[++idx % (sizeof(rnd) / sizeof(rnd[0]))];
-            foo.update(p, p);
-        }
-#endif
         auto new_progress = (int)(in_size * 100.f / file_size);
         if (new_progress >= progress + 1) {
             SetConsoleTitleA((std::to_string(new_progress) + "%").c_str());
