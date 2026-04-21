@@ -130,7 +130,7 @@
     <ClCompile Include="cm256\cm256_decoder.cpp" />
     <ClCompile Include="cm256\cm256_encoder.cpp" />
     <ClCompile Include="cm256\gf256.cpp" />
-    <ClCompile Include="cm256\header.cpp" />
+    <ClCompile Include="cm256\cm256_header.cpp" />
     <ClCompile Include="fec_decoder.cpp" />
     <ClCompile Include="fec_decoder2.cpp" />
     <ClCompile Include="fec_decoder_base.cpp" />
@@ -140,6 +140,13 @@
     <ClCompile Include="fec_encoder2.cpp" />
     <ClCompile Include="fec_encoder_base.cpp" />
     <ClCompile Include="fec_packet.cpp" />
+    <ClCompile Include="leopard\leopard.cpp" />
+    <ClCompile Include="leopard\LeopardCommon.cpp" />
+    <ClCompile Include="leopard\LeopardFF16.cpp" />
+    <ClCompile Include="leopard\LeopardFF8.cpp" />
+    <ClCompile Include="leopard\leopard_decoder.cpp" />
+    <ClCompile Include="leopard\leopard_encoder.cpp" />
+    <ClCompile Include="leopard\leo_header.cpp" />
     <ClCompile Include="test\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -150,7 +157,7 @@
     <ClInclude Include="cm256\cm256_decoder.h" />
     <ClInclude Include="cm256\cm256_encoder.h" />
     <ClInclude Include="cm256\gf256.h" />
-    <ClInclude Include="cm256\header.h" />
+    <ClInclude Include="cm256\cm256_header.h" />
     <ClInclude Include="fec_decoder.h" />
     <ClInclude Include="fec_decoder2.h" />
     <ClInclude Include="fec_decoder_base.h" />
@@ -161,6 +168,13 @@
     <ClInclude Include="fec_adapter.h" />
     <ClInclude Include="fec_encoder_base.h" />
     <ClInclude Include="fec_packet.h" />
+    <ClInclude Include="leopard\leopard.h" />
+    <ClInclude Include="leopard\LeopardCommon.h" />
+    <ClInclude Include="leopard\LeopardFF16.h" />
+    <ClInclude Include="leopard\LeopardFF8.h" />
+    <ClInclude Include="leopard\leopard_decoder.h" />
+    <ClInclude Include="leopard\leopard_encoder.h" />
+    <ClInclude Include="leopard\leo_header.h" />
     <ClInclude Include="test\test.h" />
     <ClInclude Include="test\test2.h" />
     <ClInclude Include="test\test3.h" />

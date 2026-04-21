@@ -1,5 +1,5 @@
-#ifndef ___HEADER_H___
-#define ___HEADER_H___
+#ifndef ___CM256_HEADER_H___
+#define ___CM256_HEADER_H___
 
 #include <cstdint>
 
@@ -20,4 +20,4 @@ cm256_parse_block(const void* buf, CM256Header& header);
 bool
 init_cm256();
 
-#endif ///< ___HEADER_H___
+#endif ///< ___CM256_HEADER_H___

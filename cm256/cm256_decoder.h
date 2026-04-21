@@ -2,8 +2,7 @@
 #define ___CM256_DECODER_H___
 
 #include "../fec_adapter.h"
-#include "header.h"
-#include <set>
+#include "cm256_header.h"
 
 struct cm256_block_t;
 class CM256Decoder : public IFecDecoderAdapter {

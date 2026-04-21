@@ -2,6 +2,7 @@
 #include "fec_packet.h"
 #include "bandfec/bandfec_decoder.h"
 #include "cm256/cm256_decoder.h"
+#include "leopard/leopard_decoder.h"
 #include "./utils/number_unwrapper.h"
 #include "./utils/utils.h"
 #include "./utils/timeutils.h"
@@ -64,8 +65,16 @@ FecDecoderBase::Decoder::collect_stats(uint16_t sequence, Stats& stats, FecType 
     if (!intact && (int)(num_data_packets + num_red_packets) >= n) {
         if (kFecTypeBand == type) {
             std::cerr << "maybe RS code could recover this group(" << sequence << ")!" << std::endl;
+        } else if (kFecTypeRS == type || kFecTypeFastRS == type) {
+            /** Reed-Solomon algorithm: RS(n, k) should be capable of recovering up to n−k lost packets
+             *  k:    number of source symbols
+             *  n:    total number of coded symbols
+             *  n-k:  number of parity symbols (maximum number of erasures that can be recovered)
+             *
+             */
+            assert(0);
         } else {
-            /** The Reed-Solomon algorithm should be capable of recovering up to n−k lost packets
+            /** not reachable
              */
             assert(0);
         }
@@ -108,6 +117,8 @@ FecDecoderBase::set_stats_window_size(const int32_t wnd_ms) {
 
 void
 FecDecoderBase::decode(const uint8_t* data, int len) {
+    /** todo: refuse blocks of finished groups
+     */
     auto packet = FecPacket::parse_from_buffer(data, len);
     if (!packet) {
         return;
@@ -230,6 +241,8 @@ FecDecoderBase::get_header_info(const void* block, int32_t size) {
         BandFecDecoder::parse(block, size, info);
     } else if (kFecTypeRS == m_type) {
         CM256Decoder::parse(block, size, info);
+    } else if (kFecTypeFastRS == m_type) {
+        LeopardDecoder::parse(block, size, info);
     } else {
         assert(0);
         std::cerr << "invalid type " << (int)m_type << std::endl;
@@ -246,6 +259,8 @@ FecDecoderBase::create_decoder(uint16_t sequence) {
         decoder = new(std::nothrow) BandFecDecoder();
     } else if (kFecTypeRS == m_type) {
         decoder = new(std::nothrow) CM256Decoder();
+    } else if (kFecTypeFastRS == m_type) {
+        decoder = new(std::nothrow) LeopardDecoder();
     }
 
     if (!decoder || !decoder->create(sequence, this)) {

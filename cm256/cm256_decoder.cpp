@@ -1,5 +1,6 @@
 #include "cm256_decoder.h"
 #include "cm256.h"
+#include "cm256_header.h"
 #include "../utils/utils.h"
 
 #include <cassert>

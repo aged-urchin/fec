@@ -44,7 +44,8 @@ private:
     IFecEncoderObserver*        m_observer{ nullptr };
     bool                        m_flushed{ false };
     bool                        m_first_block{ true };
-    uint16_t                    m_sequence_number{ kFristSeqNum };
+    int32_t                     m_last_index{ kFirstSeqNum - 1 };
+    uint16_t                    m_sequence_number{ kFirstSeqNum };
 
     std::mutex                  m_mutex;
 

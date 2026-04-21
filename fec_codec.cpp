@@ -10,7 +10,7 @@ FecFragmentHeader kEndingFragHeader{ 0, 0, 0, 0 };
 
 IFecEncoder*
 create_fec_encoder(FecType type, FecMode mode, IFecEncoderObserver* observer) {
-    assert(kFecTypeBand == type || kFecTypeRS == type);
+    assert(kFecTypeBand == type || kFecTypeRS == type || kFecTypeFastRS == type);
     assert(kFecModeCompact == mode || kFecModeSoftRtp == mode);
 
     if (kFecModeCompact == mode) {

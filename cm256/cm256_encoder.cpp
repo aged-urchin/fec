@@ -1,6 +1,6 @@
 #include "cm256_encoder.h"
 #include "cm256.h"
-#include "header.h"
+#include "cm256_header.h"
 #include "../utils/utils.h"
 
 #include <iostream>
@@ -51,6 +51,9 @@ CM256Encoder::encode(const void* block, bool& done) {
     m_blocks.insert(m_blocks.end(), (uint8_t*)block, (uint8_t*)block + m_params->BlockBytes);
     ++m_num_blocks;
 
+    on_new_block(m_num_blocks - 1, (uint8_t*)block);
+    done = false;
+
     if (m_num_blocks == m_params->OriginalCount) {
         std::vector<cm256_block> blocks;
         for (int i = 0; i < m_num_blocks; ++i) {
@@ -65,6 +68,7 @@ CM256Encoder::encode(const void* block, bool& done) {
         auto ret = cm256_encode(*m_params, blocks.data(), m_recovery_blocks.data());
         if (ret != 0) {
             std::cerr << "encoding error " << ret << std::endl;
+            done = true;
             return;
         }
 
@@ -74,9 +78,6 @@ CM256Encoder::encode(const void* block, bool& done) {
 
         m_blocks.clear();
         done = true;
-    } else {
-        on_new_block(m_num_blocks - 1, (uint8_t*)block);
-        done = false;
     }
 }
 

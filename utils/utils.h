@@ -120,6 +120,8 @@ fec_type_to_value(FecType type) {
         return 0;
     } else if (kFecTypeRS == type) {
         return 1;
+    } else if (kFecTypeFastRS == type) {
+        return 2;
     }
 
     return -1;
@@ -131,6 +133,8 @@ fec_type_from_value(int32_t value) {
         return kFecTypeBand;
     } else if (1 == value) {
         return kFecTypeRS;
+    } else if (2 == value) {
+        return kFecTypeFastRS;
     }
 
     return kFecTypeNull;

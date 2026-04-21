@@ -7,8 +7,9 @@
  */
 enum FecType {
     kFecTypeNull,
-    kFecTypeBand,
-    kFecTypeRS,
+    kFecTypeBand,   ///< [Align16][Phased out]
+    kFecTypeRS,     ///< [MDS]
+    kFecTypeFastRS, ///< [Align64][MDS][FAST]
 };
 
 /** fec mode
@@ -19,7 +20,7 @@ enum FecMode {
     kFecModeSoftRtp,
 };
 
-enum { kFristSeqNum = 0, kFirstBlockIndex = 0 };
+enum { kFirstSeqNum = 0, kFirstBlockIndex = 0 };
 enum { kMaxContLossCount = 64 };
 enum { kSoftRtpOneByteSizeMax = 127, kSoftRtpTwoByteSizeMax = 32767 };
 
@@ -140,7 +141,7 @@ struct FecHeader {
      */
     uint8_t     sig : 2; ///< signature: must be '11', distinguish from DTLS/STUN/RTP/RTCP
     uint8_t     ver : 2; ///< version:   version number
-    uint8_t     typ : 2; ///< type:      FecType, 0 is kFecTypeBand, 1 is kFecTypeRS
+    uint8_t     typ : 2; ///< type:      FecType, 0 is kFecTypeBand, 1 is kFecTypeRS, 2 is kFecTypeFastRS
     uint8_t     mod : 2; ///< mode:      FecMode, 0 is kFecModeCompact, 1 is kFecModeSoftRtp
 
     uint8_t     red : 1; ///< redundant: 0 for original packet, 1 for redundant packet

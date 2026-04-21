@@ -2,6 +2,7 @@
 #include "fec_packet.h"
 #include "bandfec/bandfec_encoder.h"
 #include "cm256/cm256_encoder.h"
+#include "leopard/leopard_encoder.h"
 #include "./utils/utils.h"
 
 #include <iostream>
@@ -70,6 +71,8 @@ FecEncoderBase::create_encoder() {
         encoder = new(std::nothrow) BandFecEncoder();
     } else if (kFecTypeRS == m_type) {
         encoder = new(std::nothrow) CM256Encoder();
+    } else if (kFecTypeFastRS == m_type) {
+        encoder = new(std::nothrow) LeopardEncoder();
     }
 
     if (!encoder || !encoder->create(m_config, m_sequence_number++, this)) {
@@ -92,6 +95,12 @@ FecEncoderBase::create_encoder() {
 void
 FecEncoderBase::destroy_encoder() {
     if (m_encoder) {
+        assert(m_last_index == m_active_config.red_blocks + m_active_config.red_blocks - 1);
+        if (m_last_index != m_active_config.red_blocks + m_active_config.red_blocks - 1) {
+            std::cerr << "encoder generated incomplete group, expecting blocks: " << m_active_config.red_blocks + m_active_config.red_blocks << ", got: " << m_last_index + 1 << std::endl;
+        }
+        m_last_index = kFirstSeqNum - 1; ///< reset for next group
+
         m_encoder->destroy();
 
         delete m_encoder;
@@ -101,7 +110,13 @@ FecEncoderBase::destroy_encoder() {
 
 bool
 FecEncoderBase::do_set_block_size(int size_in_bytes) {
-    auto alignment    = 16; ///< actually bandfec requires alignment on '4 * kFecParamG', while 'cm256' has no requirements
+    /**!!! bandfec requires alignment on '4 * kFecParamG', cm256 has no requirements, leopard requires alignment on 64
+     */
+    auto alignment = 16; ///< kFecParamG is 4 in bandfec
+    if (kFecTypeFastRS == m_type) {
+        alignment = 64;
+    }
+
     auto aligned_size = (size_in_bytes + alignment - 1) & ~(alignment - 1);
 
     if (aligned_size <= (int)sizeof(FecFragmentHeader)) {
@@ -121,6 +136,20 @@ FecEncoderBase::do_set_red_params(int blocks_in_group, int red_blocks_in_group) 
         return false;
     }
 
+    if (kFecTypeFastRS == m_type) {
+        /** The sum of original_count + recovery_count must not exceed 65536.
+         */
+        if (blocks_in_group + red_blocks_in_group > 65536) {
+            std::cerr << "group size could not be larger than 65536 for kFecTypeFastRS" << std::endl;
+            return false;
+        }
+
+        if (red_blocks_in_group > blocks_in_group) {
+            std::cerr << "the number of red blocks could not be more than that of data blocks for kFecTypeFastRS" << std::endl;
+            return false;
+        }
+    }
+
     m_config.blocks     = blocks_in_group;
     m_config.red_blocks = red_blocks_in_group;
 
@@ -130,6 +159,15 @@ FecEncoderBase::do_set_red_params(int blocks_in_group, int red_blocks_in_group) 
 
 void
 FecEncoderBase::on_encoder_output(IFecEncoderAdapter* adapter, uint16_t sequence, int32_t index, bool red, const uint8_t* data, int32_t len) {
+    assert(index >= kFirstBlockIndex && index < m_active_config.blocks + m_active_config.red_blocks);
+    assert(index == m_last_index + 1);
+
+    if (index != m_last_index + 1) {
+        std::cerr << "index gap in output blocks, " << m_last_index << " --> " << index << std::endl;
+    }
+
+    m_last_index = index;
+
     if (m_first_block) {
         assert(0 == index);
         m_first_block = false;
