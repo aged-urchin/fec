@@ -82,7 +82,7 @@ LeopardDecoder::decode(const void* block) {
         auto ret = leo_decode(header.s,
                               header.n,
                               header.k,
-                              work_data.size(),
+                              (uint32_t)work_data.size(),
                               (void**)&m_data_blocks[0],
                               (void**)&m_red_blocks[0],
                               (void**)&work_data[0]);

@@ -8,7 +8,7 @@
 enum FecType {
     kFecTypeNull,
     kFecTypeBand,   ///< [Align16][Phased out]
-    kFecTypeRS,     ///< [MDS]
+    kFecTypeRS,     ///< [MDS][Group256]
     kFecTypeFastRS, ///< [Align64][MDS][FAST]
 };
 
@@ -301,13 +301,13 @@ void
 destroy_fec_encoder(IFecEncoder* encoder);
 
 IFecDecoder*
-create_fec_decoder(IFecDecoderObserver* observer);
+create_fec_decoder(FecType type, FecMode mode, IFecDecoderObserver* observer);
 
 void
 destroy_fec_decoder(IFecDecoder* decoder, PacketLossStats* stats = nullptr);
 
 IFecDecoder*
-create_fec_decoder2(FecType type, FecMode mode, IFecDecoderObserver* observer);
+create_fec_decoder2(IFecDecoderObserver* observer);
 
 void
 destroy_fec_decoder2(IFecDecoder* decoder, PacketLossStats* stats = nullptr);

@@ -17,12 +17,10 @@
 
 namespace TEST2 {
 
-#define TEST_DECODER_API2 true
-
 RandomLossTool traffic(LossRateType::LOSS_30_PERCENT);
 FecChecker data_checker;
 
-const FecType kFecType = kFecTypeBand;
+const FecType kFecType = kFecTypeFastRS;
 const int kFecParamN = 10;
 const int kFecParamK = 10;
 
@@ -32,11 +30,8 @@ public:
     void start() {
         printf("=======================TEST2========================\n");
         m_encoder = create_fec_encoder(kFecType, kFecModeSoftRtp, this);
-#if TEST_DECODER_API2
-        m_decoder = create_fec_decoder2(kFecType, kFecModeSoftRtp, this);
-#else
-        m_decoder = create_fec_decoder(this);
-#endif
+        m_decoder = create_fec_decoder(kFecType, kFecModeSoftRtp, this);
+
         m_encoder->set_red_params(kFecParamN, kFecParamK);
         m_t0 = get_current_ms();
     }
@@ -50,11 +45,8 @@ public:
         }
 
         PacketLossStats stats;
-#if TEST_DECODER_API2
-        destroy_fec_decoder2(m_decoder, &stats);
-#else
+
         destroy_fec_decoder(m_decoder, &stats);
-#endif
         m_decoder = nullptr;
 
         printf("stats -- packet lossrate: %f%% , effective packet lossrate: %f%%, missing groups: %lld\n",
@@ -80,12 +72,12 @@ public:
 
     void push_data(const std::vector<uint8_t>& data) {
         std::vector<uint8_t> crc_data(data.size() + 8);
-        data_checker.add_check(data.data(), data.size(), crc_data.data(), crc_data.size());
+        data_checker.add_check(data.data(), (uint32_t)data.size(), crc_data.data(), (uint32_t)crc_data.size());
 
-        decode(crc_data.data(), crc_data.size(), true);
+        decode(crc_data.data(), (int32_t)crc_data.size(), true);
         ++m_total_rtp_packets;
 
-        m_encoder->encode(crc_data.data(), crc_data.size());
+        m_encoder->encode(crc_data.data(), (int32_t)crc_data.size());
         ++m_encoded_frames;
     }
 

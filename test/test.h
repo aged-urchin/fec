@@ -26,11 +26,11 @@ namespace TEST {
     const int kFecParamK = 10;
 
     class Foo : public IFecEncoderObserver,
-        public IFecDecoderObserver {
+                public IFecDecoderObserver {
     public:
         void start() {
-            m_encoder = create_fec_encoder(kFecTypeBand, kFecModeCompact, this);
-            m_decoder = create_fec_decoder(this);
+            m_encoder = create_fec_encoder(kFecTypeFastRS, kFecModeCompact, this);
+            m_decoder = create_fec_decoder(kFecTypeFastRS, kFecModeCompact, this);
             //m_decoder->set_max_packet_lifetime(INT64_MAX);
 
             m_encoder->set_block_size(kFecParamS);

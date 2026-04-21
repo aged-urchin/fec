@@ -28,23 +28,7 @@ destroy_fec_encoder(IFecEncoder* encoder) {
 }
 
 IFecDecoder*
-create_fec_decoder(IFecDecoderObserver* observer) {
-    auto decoder = new(std::nothrow) FecDecoderProxy(observer);
-    return decoder;
-}
-
-void
-destroy_fec_decoder(IFecDecoder* decoder, PacketLossStats* stats) {
-    auto fec_decoder = (FecDecoderProxy*)decoder;
-    if (fec_decoder) {
-        fec_decoder->destroy(stats);
-    }
-
-    delete fec_decoder;
-}
-
-IFecDecoder*
-create_fec_decoder2(FecType type, FecMode mode, IFecDecoderObserver* observer) {
+create_fec_decoder(FecType type, FecMode mode, IFecDecoderObserver* observer) {
     if (kFecModeCompact == mode) {
         return new (std::nothrow) FecDecoder(type, observer);
     } else if (kFecModeSoftRtp == mode) {
@@ -56,7 +40,7 @@ create_fec_decoder2(FecType type, FecMode mode, IFecDecoderObserver* observer) {
 }
 
 void
-destroy_fec_decoder2(IFecDecoder* decoder, PacketLossStats* stats) {
+destroy_fec_decoder(IFecDecoder* decoder, PacketLossStats* stats) {
     if (!decoder) {
         return;
     }
@@ -69,4 +53,20 @@ destroy_fec_decoder2(IFecDecoder* decoder, PacketLossStats* stats) {
     }
 
     delete decoder;
+}
+
+IFecDecoder*
+create_fec_decoder2(IFecDecoderObserver* observer) {
+    auto decoder = new(std::nothrow) FecDecoderProxy(observer);
+    return decoder;
+}
+
+void
+destroy_fec_decoder2(IFecDecoder* decoder, PacketLossStats* stats) {
+    auto fec_decoder = (FecDecoderProxy*)decoder;
+    if (fec_decoder) {
+        fec_decoder->destroy(stats);
+    }
+
+    delete fec_decoder;
 }
