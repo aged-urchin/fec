@@ -8,8 +8,8 @@
 #include <iostream>
 
 FecEncoderBase::FecEncoderBase(FecType type, IFecEncoderObserver* observer) :
-m_type(type),
-m_observer(observer) {
+m_observer(observer),
+m_type(type) {
 
 }
 

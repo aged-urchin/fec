@@ -57,12 +57,12 @@ CM256Encoder::encode(const void* block, bool& done) {
     if (m_num_blocks == m_params->OriginalCount) {
         std::vector<cm256_block> blocks;
         for (int i = 0; i < m_num_blocks; ++i) {
-            cm256_block block;
+            cm256_block cm_block;
 
-            block.Index = i;
-            block.Block = m_blocks.data() + i * m_params->BlockBytes;
+            cm_block.Index = i;
+            cm_block.Block = m_blocks.data() + i * m_params->BlockBytes;
 
-            blocks.push_back(block);
+            blocks.push_back(cm_block);
         }
 
         auto ret = cm256_encode(*m_params, blocks.data(), m_recovery_blocks.data());

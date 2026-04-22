@@ -86,12 +86,12 @@ CM256Decoder::decode(const void* block) {
         params.RecoveryCount = header.k;
 
         std::vector<cm256_block_t> blocks;
-        for (auto& block : m_data_blocks) {
-            blocks.push_back(*block);
+        for (auto& data_block : m_data_blocks) {
+            blocks.push_back(*data_block);
         }
 
-        for (auto& block : m_red_blocks) {
-            blocks.push_back(*block);
+        for (auto& red_block : m_red_blocks) {
+            blocks.push_back(*red_block);
         }
 
         auto ret = cm256_decode(params, blocks.data());

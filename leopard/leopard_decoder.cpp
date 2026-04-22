@@ -139,15 +139,15 @@ LeopardDecoder::store_new_block(LeopardHeader* header, const void* data, uint16_
     auto is_red = header->i >= header->n;
     auto index  = header->i - (is_red ? header->n : 0);
 
-    assert(is_red || (index < m_data_blocks.size() && !m_data_blocks[index]));
-    assert(!is_red || (index < m_red_blocks.size() && !m_red_blocks[index]));
+    assert(is_red || (index < (int)m_data_blocks.size() && !m_data_blocks[index]));
+    assert(!is_red || (index < (int)m_red_blocks.size() && !m_red_blocks[index]));
 
-    if (!is_red && (index >= m_data_blocks.size() || m_data_blocks[index])) {
+    if (!is_red && (index >= (int)m_data_blocks.size() || m_data_blocks[index])) {
         std::cerr << "invalid data index " << header->i << std::endl;
         return false;
     }
 
-    if (is_red && (index >= m_red_blocks.size() || m_red_blocks[index])) {
+    if (is_red && (index >= (int)m_red_blocks.size() || m_red_blocks[index])) {
         std::cerr << "invalid red index " << header->i << std::endl;
         return false;
     }
