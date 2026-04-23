@@ -1,14 +1,14 @@
-#ifndef ___FEC_DECODER_H___
-#define ___FEC_DECODER_H___
+#ifndef ___FEC_DECODER_COMPACT_H___
+#define ___FEC_DECODER_COMPACT_H___
 
 #include "fec_decoder_base.h"
 #include <vector>
 
-class FecDecoder : public FecDecoderBase {
+class FecDecoderCompact : public FecDecoderBase {
 public:
-    FecDecoder(FecType type, IFecDecoderObserver* observer);
+    FecDecoderCompact(FecType type, IFecDecoderObserver* observer);
 
-    ~FecDecoder() override;
+    ~FecDecoderCompact() override;
 
     void destroy(PacketLossStats* stats);
 
@@ -32,4 +32,4 @@ private:
     std::map<uint16_t, ReconstructedFrame*> m_pending_frames; ///< FecFragmentHeader::frame_number
 };
 
-#endif ///< ___FEC_DECODER_H___
+#endif ///< ___FEC_DECODER_COMPACT_H___

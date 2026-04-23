@@ -1,16 +1,16 @@
-#include "fec_encoder.h"
+#include "fec_encoder_compact.h"
 #include "./utils/utils.h"
 
 #include <iostream>
 #include <cassert>
 
-FecEncoder::FecEncoder(FecType type, IFecEncoderObserver* observer) :
+FecEncoderCompact::FecEncoderCompact(FecType type, IFecEncoderObserver* observer) :
 FecEncoderBase(type, observer) {
 
 }
 
 void
-FecEncoder::do_encode(const uint8_t* data, int data_len) {
+FecEncoderCompact::do_encode(const uint8_t* data, int data_len) {
     FecFragmentHeader header{ 0 };
     auto src      = (uint8_t*)data;
     auto src_size = data_len;
@@ -81,7 +81,7 @@ FecEncoder::do_encode(const uint8_t* data, int data_len) {
 }
 
 void
-FecEncoder::do_flush() {
+FecEncoderCompact::do_flush() {
     if (!m_encoder) {
         return;
     }
@@ -96,7 +96,7 @@ FecEncoder::do_flush() {
 }
 
 FecHeader*
-FecEncoder::make_fec_header(uint16_t sequence, bool red) {
+FecEncoderCompact::make_fec_header(uint16_t sequence, bool red) {
     auto header = create_fec_header();
     /** bit 0..1
      */

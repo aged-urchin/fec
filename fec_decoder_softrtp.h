@@ -1,14 +1,14 @@
-#ifndef ___FEC_DECODER2_H___
-#define ___FEC_DECODER2_H___
+#ifndef ___FEC_DECODER_SOFTRTP_H___
+#define ___FEC_DECODER_SOFTRTP_H___
 
 #include "fec_decoder_base.h"
 #include <vector>
 
-class FecDecoder2 : public FecDecoderBase {
+class FecDecoderSoftRtp : public FecDecoderBase {
 public:
-    FecDecoder2(FecType type, IFecDecoderObserver* observer);
+    FecDecoderSoftRtp(FecType type, IFecDecoderObserver* observer);
 
-    ~FecDecoder2() override;
+    ~FecDecoderSoftRtp() override;
 
     void destroy(PacketLossStats* stats);
 
@@ -50,4 +50,4 @@ private:
     std::map<uint16_t, FecGroup*>           m_fec_groups;
 };
 
-#endif ///< ___FEC_DECODER2_H___
+#endif ///< ___FEC_DECODER_SOFTRTP_H___

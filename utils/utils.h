@@ -139,4 +139,5 @@ fec_type_from_value(int32_t value) {
 
     return kFecTypeNull;
 }
+
 #endif ///< ___UTILS_H___

@@ -1,12 +1,12 @@
-#ifndef ___FEC_ENCODER_H___
-#define ___FEC_ENCODER_H___
+#ifndef ___FEC_ENCODER_COMPACT_H___
+#define ___FEC_ENCODER_COMPACT_H___
 
 #include "fec_encoder_base.h"
 #include <vector>
 
-class FecEncoder : public FecEncoderBase {
+class FecEncoderCompact : public FecEncoderBase {
 public:
-    FecEncoder(FecType type, IFecEncoderObserver* observer);
+    FecEncoderCompact(FecType type, IFecEncoderObserver* observer);
 
 private:
     void do_encode(const uint8_t* data, int data_len) override;
@@ -21,4 +21,4 @@ private:
     std::vector<uint8_t>    m_block;
 };
 
-#endif ///< ___BANDFEC_ENCODER_H___
+#endif ///< ___FEC_ENCODER_COMPACT_H___

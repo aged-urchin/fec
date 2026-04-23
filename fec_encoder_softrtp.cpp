@@ -1,16 +1,16 @@
-#include "fec_encoder2.h"
+#include "fec_encoder_softrtp.h"
 #include "./utils/utils.h"
 
 #include <iostream>
 #include <cassert>
 
-FecEncoder2::FecEncoder2(FecType type, IFecEncoderObserver* observer) :
+FecEncoderSoftRtp::FecEncoderSoftRtp(FecType type, IFecEncoderObserver* observer) :
 FecEncoderBase(type, observer) {
 
 }
 
 bool
-FecEncoder2::set_red_params(int blocks_in_group, int red_blocks_in_group) {
+FecEncoderSoftRtp::set_red_params(int blocks_in_group, int red_blocks_in_group) {
     /** 2: kRtpFecExtTwoByteSizeMax
      */
     if (blocks_in_group > UINT8_MAX / 2) {
@@ -22,7 +22,7 @@ FecEncoder2::set_red_params(int blocks_in_group, int red_blocks_in_group) {
 }
 
 void
-FecEncoder2::do_encode(const uint8_t* data, int data_len) {
+FecEncoderSoftRtp::do_encode(const uint8_t* data, int data_len) {
     RtpHeader rtp_header;
     if (!parse_rtp_buffer(data, data_len, rtp_header)) {
         std::cerr << "invalid rtp packet" << std::endl;
@@ -65,7 +65,7 @@ FecEncoder2::do_encode(const uint8_t* data, int data_len) {
 }
 
 void
-FecEncoder2::do_flush() {
+FecEncoderSoftRtp::do_flush() {
     std::cerr << "flush current group with packets: " << m_packets.size() << std::endl;
     if (0 == m_max_packet_len || m_packets.empty()) {
         return;
@@ -79,7 +79,7 @@ FecEncoder2::do_flush() {
 }
 
 void
-FecEncoder2::encode_group() {
+FecEncoderSoftRtp::encode_group() {
     if (0 == m_max_packet_len || m_packets.empty()) {
         return;
     }
@@ -124,7 +124,7 @@ FecEncoder2::encode_group() {
 }
 
 void
-FecEncoder2::reset() {
+FecEncoderSoftRtp::reset() {
     destroy_encoder();
 
     m_base_rtp_sequence_number = 0;
@@ -136,7 +136,7 @@ FecEncoder2::reset() {
 }
 
 FecHeader*
-FecEncoder2::make_fec_header(uint16_t sequence, bool red) {
+FecEncoderSoftRtp::make_fec_header(uint16_t sequence, bool red) {
     if (!red) {
         return nullptr;
     }

@@ -1,11 +1,11 @@
-#include "fec_decoder.h"
+#include "fec_decoder_compact.h"
 #include "./utils/number_unwrapper.h"
 #include "./utils/utils.h"
 #include "./utils/timeutils.h"
 
 #include <iostream>
 
-FecDecoder::ReconstructedFrame::ReconstructedFrame(int size) {
+FecDecoderCompact::ReconstructedFrame::ReconstructedFrame(int size) {
     if (size > 0) {
         data.resize(size);
         creation_time = Time::clocktime();
@@ -13,7 +13,7 @@ FecDecoder::ReconstructedFrame::ReconstructedFrame(int size) {
 }
 
 bool
-FecDecoder::ReconstructedFrame::ready() {
+FecDecoderCompact::ReconstructedFrame::ready() {
     int total_written = 0;
     for (const auto& slot : slots) {
         total_written += slot.second;
@@ -23,7 +23,7 @@ FecDecoder::ReconstructedFrame::ready() {
 }
 
 bool
-FecDecoder::ReconstructedFrame::push_fragment(int offset, const uint8_t* fragment_data, int size) {
+FecDecoderCompact::ReconstructedFrame::push_fragment(int offset, const uint8_t* fragment_data, int size) {
     if (data.empty()) {
         std::cerr << "invalid operation" << std::endl;
         return false;
@@ -55,17 +55,17 @@ FecDecoder::ReconstructedFrame::push_fragment(int offset, const uint8_t* fragmen
     return true;
 }
 
-FecDecoder::FecDecoder(FecType type, IFecDecoderObserver* observer) :
+FecDecoderCompact::FecDecoderCompact(FecType type, IFecDecoderObserver* observer) :
 FecDecoderBase(type, kFecModeCompact, observer) {
 
 }
 
-FecDecoder::~FecDecoder() {
+FecDecoderCompact::~FecDecoderCompact() {
 
 }
 
 void
-FecDecoder::destroy(PacketLossStats* stats) {
+FecDecoderCompact::destroy(PacketLossStats* stats) {
     destroy_decoders(stats);
 
     while (!m_pending_frames.empty()) {
@@ -77,7 +77,7 @@ FecDecoder::destroy(PacketLossStats* stats) {
 }
 
 void
-FecDecoder::clean_old_frames(uint16_t frame_number) {
+FecDecoderCompact::clean_old_frames(uint16_t frame_number) {
     auto now_ms   = Time::clocktime();
     auto lifetime = get_max_packet_lifetime();
     auto deadline = now_ms - lifetime;
@@ -98,7 +98,7 @@ FecDecoder::clean_old_frames(uint16_t frame_number) {
 }
 
 void
-FecDecoder::on_new_block(uint16_t sequence, int32_t, const uint8_t* data, int len, bool recovered) {
+FecDecoderCompact::on_new_block(uint16_t sequence, int32_t, const uint8_t* data, int len, bool recovered) {
     auto remaining_data = (uint8_t*)data;
     auto remaining_len  = len;
 

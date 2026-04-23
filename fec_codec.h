@@ -7,9 +7,10 @@
  */
 enum FecType {
     kFecTypeNull,
-    kFecTypeBand,   ///< [Align16][Phased out]
-    kFecTypeRS,     ///< [MDS][Group256]
-    kFecTypeFastRS, ///< [Align64][MDS][FAST]
+    kFecTypeBand,    ///< [Align16][Phased out]
+    kFecTypeRS,      ///< [MDS][Group256][Intrinsic SIMD]
+    kFecTypeFastRS,  ///< [Align64][MDS][FAST][Intrinsic SIMD]
+    kFecTypeFlex,    ///< [Inefficient][Not Implemented][Not Recommended]
 };
 
 /** fec mode
@@ -141,11 +142,11 @@ struct FecHeader {
      */
     uint8_t     sig : 2; ///< signature: must be '11', distinguish from DTLS/STUN/RTP/RTCP
     uint8_t     ver : 2; ///< version:   version number
-    uint8_t     typ : 2; ///< type:      FecType, 0 is kFecTypeBand, 1 is kFecTypeRS, 2 is kFecTypeFastRS
+    uint8_t     typ : 2; ///< type:      FecType, 0 is kFecTypeBand, 1 is kFecTypeRS, 2 is kFecTypeFastRS, 3 is kFecTypeFlex
     uint8_t     mod : 2; ///< mode:      FecMode, 0 is kFecModeCompact, 1 is kFecModeSoftRtp
 
     uint8_t     red : 1; ///< redundant: 0 for original packet, 1 for redundant packet
-    uint8_t     sid : 3; ///< stream id: identify multiply fec streams
+    uint8_t     sid : 3; ///< stream id: identify multiply fec streams[not used]
     uint8_t     rsv : 4; ///< reserved
 
     uint16_t    sequence_number; ///< ranges from kFristSeqNum, kFristSeqNum + 1, ...
@@ -281,7 +282,7 @@ public:
     /** set window size of stats
      */
     virtual void set_stats_window_size(const int32_t wnd_ms) = 0;
-    /** decode one fec packet (e.g. from an udp socket)
+    /** input one fec packet(for Compact or SoftRtp) or one rtp packet(for SoftRtp)
      */
     virtual void decode(const uint8_t* data, int len) = 0;
     /** get current packet loss statistics
@@ -305,11 +306,5 @@ create_fec_decoder(FecType type, FecMode mode, IFecDecoderObserver* observer);
 
 void
 destroy_fec_decoder(IFecDecoder* decoder, PacketLossStats* stats = nullptr);
-
-IFecDecoder*
-create_fec_decoder2(IFecDecoderObserver* observer);
-
-void
-destroy_fec_decoder2(IFecDecoder* decoder, PacketLossStats* stats = nullptr);
 
 #endif ///< ___FEC_CODEC_H___

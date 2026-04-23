@@ -1,8 +1,7 @@
-#include "fec_encoder.h"
-#include "fec_encoder2.h"
-#include "fec_decoder.h"
-#include "fec_decoder2.h"
-#include "fec_decoder_proxy.h"
+#include "fec_encoder_compact.h"
+#include "fec_encoder_softrtp.h"
+#include "fec_decoder_compact.h"
+#include "fec_decoder_softrtp.h"
 
 #include <cassert>
 
@@ -14,9 +13,9 @@ create_fec_encoder(FecType type, FecMode mode, IFecEncoderObserver* observer) {
     assert(kFecModeCompact == mode || kFecModeSoftRtp == mode);
 
     if (kFecModeCompact == mode) {
-        return new (std::nothrow) FecEncoder(type, observer);
+        return new (std::nothrow) FecEncoderCompact(type, observer);
     } else if (kFecModeSoftRtp == mode) {
-        return new (std::nothrow) FecEncoder2(type, observer);
+        return new (std::nothrow) FecEncoderSoftRtp(type, observer);
     }
 
     return nullptr;
@@ -30,9 +29,9 @@ destroy_fec_encoder(IFecEncoder* encoder) {
 IFecDecoder*
 create_fec_decoder(FecType type, FecMode mode, IFecDecoderObserver* observer) {
     if (kFecModeCompact == mode) {
-        return new (std::nothrow) FecDecoder(type, observer);
+        return new (std::nothrow) FecDecoderCompact(type, observer);
     } else if (kFecModeSoftRtp == mode) {
-        return new (std::nothrow) FecDecoder2(type, observer);
+        return new (std::nothrow) FecDecoderSoftRtp(type, observer);
     }
 
     assert(0);
@@ -47,26 +46,10 @@ destroy_fec_decoder(IFecDecoder* decoder, PacketLossStats* stats) {
 
     auto mode = decoder->mode();
     if (kFecModeCompact == mode) {
-        ((FecDecoder*)decoder)->destroy(stats);
+        ((FecDecoderCompact*)decoder)->destroy(stats);
     } else if (kFecModeSoftRtp == mode) {
-        ((FecDecoder2*)decoder)->destroy(stats);
+        ((FecDecoderSoftRtp*)decoder)->destroy(stats);
     }
 
     delete decoder;
-}
-
-IFecDecoder*
-create_fec_decoder2(IFecDecoderObserver* observer) {
-    auto decoder = new(std::nothrow) FecDecoderProxy(observer);
-    return decoder;
-}
-
-void
-destroy_fec_decoder2(IFecDecoder* decoder, PacketLossStats* stats) {
-    auto fec_decoder = (FecDecoderProxy*)decoder;
-    if (fec_decoder) {
-        fec_decoder->destroy(stats);
-    }
-
-    delete fec_decoder;
 }

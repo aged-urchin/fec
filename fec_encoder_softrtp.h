@@ -1,12 +1,12 @@
-#ifndef ___FEC_ENCODER2_H___
-#define ___FEC_ENCODER2_H___
+#ifndef ___FEC_ENCODER_SOFTRTP_H___
+#define ___FEC_ENCODER_SOFTRTP_H___
 
 #include "fec_encoder_base.h"
 #include <vector>
 
-class FecEncoder2 : public FecEncoderBase {
+class FecEncoderSoftRtp : public FecEncoderBase {
 public:
-    FecEncoder2(FecType type, IFecEncoderObserver* observer);
+    FecEncoderSoftRtp(FecType type, IFecEncoderObserver* observer);
 
     bool set_red_params(int blocks_in_group, int red_blocks_in_group) override;
 
@@ -30,4 +30,4 @@ private:
     std::vector<std::vector<uint8_t>>   m_packets;
 };
 
-#endif ///< ___FEC_ENCODER2_H___
+#endif ///< ___FEC_ENCODER_SOFTRTP_H___

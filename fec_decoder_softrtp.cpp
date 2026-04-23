@@ -1,4 +1,4 @@
-#include "fec_decoder2.h"
+#include "fec_decoder_softrtp.h"
 #include "bandfec/bandfec.h"
 #include "./utils/utils.h"
 #include "./utils/timeutils.h"
@@ -6,7 +6,7 @@
 #include <iostream>
 #include <cassert>
 
-FecDecoder2::FecGroup::FecGroup(uint16_t sequence, const FecHeaderInfo* info, SoftRtp* rtp_ext) :
+FecDecoderSoftRtp::FecGroup::FecGroup(uint16_t sequence, const FecHeaderInfo* info, SoftRtp* rtp_ext) :
 sequence(sequence) {
     assert(info);
     assert(info->pack);
@@ -43,26 +43,26 @@ sequence(sequence) {
     }
 }
 
-FecDecoder2::FecGroup::~FecGroup() {
+FecDecoderSoftRtp::FecGroup::~FecGroup() {
 
 }
 
-FecDecoder2::FecDecoder2(FecType type, IFecDecoderObserver* observer) :
+FecDecoderSoftRtp::FecDecoderSoftRtp(FecType type, IFecDecoderObserver* observer) :
 FecDecoderBase(type, kFecModeSoftRtp, observer) {
 
 }
 
-FecDecoder2::~FecDecoder2() {
+FecDecoderSoftRtp::~FecDecoderSoftRtp() {
 
 }
 
 void
-FecDecoder2::destroy(PacketLossStats* stats) {
+FecDecoderSoftRtp::destroy(PacketLossStats* stats) {
     destroy_decoders(stats);
 }
 
 void
-FecDecoder2::decode(const uint8_t* data, int len) {
+FecDecoderSoftRtp::decode(const uint8_t* data, int len) {
     if (!is_rtp(data, len)) {
         /** a fec packet (with 'FecHeader::red' == 1)
          */
@@ -111,14 +111,14 @@ FecDecoder2::decode(const uint8_t* data, int len) {
 }
 
 bool
-FecDecoder2::is_rtp(const uint8_t* data, size_t len) {
+FecDecoderSoftRtp::is_rtp(const uint8_t* data, size_t len) {
     /** we could tell the difference between a rtp packet and a fec packet from the beginning two bits
      */
     return len >= 12 && 0x80 == (data[0] & 0xC0);
 }
 
 void
-FecDecoder2::purge_expired_data(int64_t now_ms) {
+FecDecoderSoftRtp::purge_expired_data(int64_t now_ms) {
     auto lifetime_ms = get_max_packet_lifetime();
     for (auto itr = m_rtp_packets.begin(); itr != m_rtp_packets.end(); ) {
         auto rtp_packet = *itr;
@@ -134,7 +134,7 @@ FecDecoder2::purge_expired_data(int64_t now_ms) {
 }
 
 bool
-FecDecoder2::maybe_decode_rtp_packet(uint16_t rtp_sequence, const uint8_t* rtp_packet_data, int rtp_packet_len) {
+FecDecoderSoftRtp::maybe_decode_rtp_packet(uint16_t rtp_sequence, const uint8_t* rtp_packet_data, int rtp_packet_len) {
     FecGroup* group = nullptr;
     for (auto& fec_group : m_fec_groups) {
         if (fec_group.second->rtp_packet_sizes.count(rtp_sequence) > 0) {
@@ -154,7 +154,7 @@ FecDecoder2::maybe_decode_rtp_packet(uint16_t rtp_sequence, const uint8_t* rtp_p
 }
 
 void
-FecDecoder2::decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, const void* data, int len) {
+FecDecoderSoftRtp::decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, const void* data, int len) {
     /** construct a fec block and send it to the BandFecDecoder
      */
     auto header   = fec_group->header_info;
@@ -178,7 +178,7 @@ FecDecoder2::decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, const 
 }
 
 void
-FecDecoder2::on_sequence_start(uint16_t sequence, const FecHeader* header, const FecHeaderInfo* info) {
+FecDecoderSoftRtp::on_sequence_start(uint16_t sequence, const FecHeader* header, const FecHeaderInfo* info) {
     std::cerr << "sequence " << sequence << " starts" << std::endl;
 
     assert(0 == m_fec_groups.count(sequence));
@@ -206,7 +206,7 @@ FecDecoder2::on_sequence_start(uint16_t sequence, const FecHeader* header, const
 }
 
 void
-FecDecoder2::on_sequence_end(uint16_t sequence) {
+FecDecoderSoftRtp::on_sequence_end(uint16_t sequence) {
     std::cerr << "sequence " << sequence << " ends" << std::endl;
     if (0 == m_fec_groups.count(sequence)) {
         std::cerr << "no such a sequence: " << sequence << std::endl;
@@ -220,7 +220,7 @@ FecDecoder2::on_sequence_end(uint16_t sequence) {
 }
 
 void
-FecDecoder2::on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len, bool recovered) {
+FecDecoderSoftRtp::on_new_block(uint16_t sequence_number, int32_t pos, const uint8_t* data, int len, bool recovered) {
     assert(m_fec_groups.count(sequence_number) != 0);
     if (0 == m_fec_groups.count(sequence_number)) {
         std::cerr << "no sequence number(" << sequence_number << ") found" << std::endl;
