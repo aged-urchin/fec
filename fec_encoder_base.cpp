@@ -95,9 +95,9 @@ FecEncoderBase::create_encoder() {
 void
 FecEncoderBase::destroy_encoder() {
     if (m_encoder) {
-        assert(m_last_index == m_active_config.red_blocks + m_active_config.red_blocks - 1);
-        if (m_last_index != m_active_config.red_blocks + m_active_config.red_blocks - 1) {
-            std::cerr << "encoder generated incomplete group, expecting blocks: " << m_active_config.red_blocks + m_active_config.red_blocks << ", got: " << m_last_index + 1 << std::endl;
+        assert(m_last_index == m_active_config.blocks + m_active_config.red_blocks - 1);
+        if (m_last_index != m_active_config.blocks + m_active_config.red_blocks - 1) {
+            std::cerr << "encoder generated incomplete group, expecting blocks: " << m_active_config.blocks + m_active_config.red_blocks << ", got: " << m_last_index + 1 << std::endl;
         }
         m_last_index = kFirstSeqNum - 1; ///< reset for next group
 
