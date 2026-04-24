@@ -56,6 +56,7 @@ private:
     void remove_decoder(uint16_t sequence);
 
     struct Stats {
+        uint16_t                sequence{ 0 };
         int64_t                 received_data_packets{ 0 };
         int64_t                 expected_data_packets{ 0 };
         int64_t                 recovered_packets{ 0 };
@@ -96,6 +97,7 @@ private:
     IFecDecoderObserver*                m_observer;
     std::map<uint16_t, Decoder*>        m_seq_decoders;   ///< FecHeader::sequence_number
 
+    int64_t                             m_last_log_stats{ 0 };
     std::mutex                          m_mutex;
 };
 

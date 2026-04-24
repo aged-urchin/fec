@@ -31,7 +31,7 @@ FecDecoderBase::Decoder::collect_stats(uint16_t sequence, Stats& stats, FecType 
     int32_t prev = kFirstBlockIndex;
     for (auto it = packets.begin(); it != packets.end(); ++it) {
         auto curr = *it;
-        auto gap = curr - prev - 1;
+        auto gap  = curr - prev - 1;
 
         if (gap > 0 && gap <= kMaxContLossCount) {
             ++stats.loss_distribution[gap];
@@ -40,6 +40,7 @@ FecDecoderBase::Decoder::collect_stats(uint16_t sequence, Stats& stats, FecType 
         prev = curr;
     }
 
+    stats.sequence              = sequence;
     stats.expected_data_packets = n;
     stats.received_data_packets = num_data_packets;
     stats.recovered_packets     = num_recovered_packets;
@@ -121,6 +122,7 @@ FecDecoderBase::decode(const uint8_t* data, int len) {
      */
     auto packet = FecPacket::parse_from_buffer(data, len);
     if (!packet) {
+        std::cerr << "invalid fec packet" << std::endl;
         return;
     }
 
@@ -128,11 +130,33 @@ FecDecoderBase::decode(const uint8_t* data, int len) {
     auto header = packet->get_header();
     assert(fec_mode_from_value(header->mod) == m_mode);
 
+    if (now_ms - m_last_log_stats > 1000) {
+        PacketLossStats stats;
+        loss_stats(stats);
+
+        std::cerr << "loss: " << stats.lossrate << ", effective lossrate: " << stats.effective_lossrate << std::endl;
+        m_last_log_stats = now_ms;
+        return;
+    }
     maybe_remove_outdated_decoders(now_ms, header->sequence_number);
 
     auto info = get_header_info((void*)packet->get_payload(), packet->get_payload_size());
 
     if (0 == m_seq_decoders.count(header->sequence_number)) {
+        auto itr = std::find_if(m_recent_stats.begin(), m_recent_stats.end(), [=](const auto& pair) {
+            return pair.second.sequence == header->sequence_number;
+        });
+
+        if (itr != m_recent_stats.end()) {
+            auto stats = itr->second;
+            /** late packets of an intact group
+             */
+            if (stats.expected_data_packets <= stats.received_data_packets + stats.recovered_packets) {
+                std::cerr << "sequence(" << header->sequence_number << ") was intact, refuse this packet" << std::endl;
+                return;
+            }
+        }
+
         auto decoder = new(std::nothrow) Decoder;
         assert(decoder);
 
