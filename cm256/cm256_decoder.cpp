@@ -152,6 +152,8 @@ CM256Decoder::parse(const void* buf, size_t, FecHeaderInfo& info) {
     info.k = header.k;
     info.i = header.i;
 
+    info.header_size = sizeof(CM256Header);
+
     info.pack = [](const FecHeaderInfo& header_info) -> std::vector<uint8_t> {
         CM256Header be_header;
         /** convert 'CM256Header' from host byte order to network byte order

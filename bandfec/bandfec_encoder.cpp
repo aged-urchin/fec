@@ -1,5 +1,6 @@
 #include "bandfec_encoder.h"
 #include "bandfec.h"
+#include "band_header.h"
 
 #include <cassert>
 
@@ -58,7 +59,7 @@ BandFecEncoder::encode(const void* block, bool& done) {
 
 void
 BandFecEncoder::on_new_block(uint16_t sequence, bool red, const uint8_t* data, int len) {
-    BandFecHeaderType bandfec_header;
+    BandFecHeader bandfec_header;
     bandfec_parse_block((void*)data, bandfec_header);
 
     m_observer->on_encoder_output(this, sequence, bandfec_header.i, red, data, len);

@@ -126,6 +126,7 @@
     <ClCompile Include="bandfec\bandfec.cpp" />
     <ClCompile Include="bandfec\bandfec_decoder.cpp" />
     <ClCompile Include="bandfec\bandfec_encoder.cpp" />
+    <ClCompile Include="bandfec\band_header.cpp" />
     <ClCompile Include="cm256\cm256.cpp" />
     <ClCompile Include="cm256\cm256_decoder.cpp" />
     <ClCompile Include="cm256\cm256_encoder.cpp" />
@@ -152,6 +153,7 @@
     <ClInclude Include="bandfec\bandfec.h" />
     <ClInclude Include="bandfec\bandfec_decoder.h" />
     <ClInclude Include="bandfec\bandfec_encoder.h" />
+    <ClInclude Include="bandfec\band_header.h" />
     <ClInclude Include="cm256\cm256.h" />
     <ClInclude Include="cm256\cm256_decoder.h" />
     <ClInclude Include="cm256\cm256_encoder.h" />

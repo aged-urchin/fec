@@ -41,7 +41,7 @@ struct SoftRtp {
     uint16_t  base_sequence_num; ///< the sequence number of the first rtp packet from a series of consecutive rtp packets
     uint8_t   delta_size_bytes;  ///< total bytes 'delta_size' occupies
 
-    /** delta packet size(relative to 'BandFecHeaderType::s')
+    /** delta packet size(relative to 'BandFecHeader::s')
      *
      * one byte length field(0 ~ 127):
      *  0
@@ -177,11 +177,11 @@ struct PacketLossStats {
  *   |<------------------------ extra header bytes (16 + 8*N bytes) ------------------------>| 
  *   .______________________________________________________________________________________________________________  ~~~  ________________________________________________________.
  *   |                      |                              |                                 |                      |     |                                 |                      |
- *   |  FecHeader(4 bytes)  | BandFecHeaderType (12 bytes) |   FecFragmentHeader0 (8 bytes)  |    data0 (n bytes)   |     |   FecFragmentHeaderN (8 bytes)  |    dataN (n bytes)   |
+ *   |  FecHeader(4 bytes)  |   BandFecHeader (12 bytes)   |   FecFragmentHeader0 (8 bytes)  |    data0 (n bytes)   |     |   FecFragmentHeaderN (8 bytes)  |    dataN (n bytes)   |
  *   |                      |                              |                                 |                      |     |                                 |                      |
  *   `--------------------------------------------------------------------------------------------------------------  ~~~  --------------------------------------------------------`
  *                                                                                           |<-- protected data -->|                                       |<-- protected data -->|
- *                                                         |<-----------------------------------------------  BandFecHeaderType::s ----------------------------------------------->|
+ *                                                         |<-------------------------------------------------  BandFecHeader::s ------------------------------------------------->|
  *                          |<----------------------------------------------------------- payload (bandfec data block) ----------------------------------------------------------->|
  *   |<------------------------------------------------------------------------------ packet buffer ------------------------------------------------------------------------------>|
  *
@@ -191,7 +191,7 @@ struct PacketLossStats {
  *   |<-------- extra header bytes (12 + N bytes)--------->| 
  *   .______________________________________________________________________________________________________________.
  *   |                      |                              |                                                        |
- *   |  FecHeader(N bytes)  | BandFecHeaderType (12 bytes) |                    data (n bytes)                      |
+ *   |  FecHeader(N bytes)  |   BandFecHeader (12 bytes)   |                    data (n bytes)                      |
  *   |                      |                              |                                                        |
  *   `--------------------------------------------------------------------------------------------------------------`
  *                                                         |<------------------ protected data -------------------->|

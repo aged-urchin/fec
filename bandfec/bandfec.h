@@ -6,16 +6,6 @@
 typedef void (*fec_send) (struct BandFecEnc* f, void* buf, size_t size, bool red, int64_t user_data1, int64_t user_data2);
 typedef void (*fec_recv) (struct BandFecDec* f, int64_t position, void* buf, int len, int64_t user_data, int64_t user_data2);
 
-struct BandFecHeaderType {
-    uint16_t    s; ///< blockSize, must be multiple of 4*g
-    uint16_t    n;
-    uint16_t    k;
-    uint8_t     w;
-    uint8_t     g;
-
-    uint32_t    i; ///< 0,...
-};
-
 struct BandFecEncDec {
     int32_t k, w, g, n, i, s;
 };
@@ -58,9 +48,6 @@ destroy_bandfec_encoder(BandFecEnc* f);
 
 BandFecDec*
 create_bandfec_decoder(fec_recv cb_recv, int64_t user_data1, int64_t user_data2);
-
-void
-bandfec_parse_block(void* buf, BandFecHeaderType& header);
 
 void
 bandfec_decode(BandFecDec* f, void* buf);

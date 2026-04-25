@@ -30,6 +30,7 @@ struct FecHeaderInfo {
     uint16_t   k;
     uint32_t   i;
 
+    uint16_t   header_size;
     std::function<std::vector<uint8_t>(const FecHeaderInfo&)> pack;
 };
 

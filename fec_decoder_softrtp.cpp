@@ -1,5 +1,4 @@
 #include "fec_decoder_softrtp.h"
-#include "bandfec/bandfec.h"
 #include "./utils/utils.h"
 #include "./utils/timeutils.h"
 
@@ -138,7 +137,7 @@ FecDecoderSoftRtp::maybe_decode_rtp_packet(uint16_t rtp_sequence, const uint8_t*
     FecGroup* group = nullptr;
     for (auto& fec_group : m_fec_groups) {
         if (fec_group.second->rtp_packet_sizes.count(rtp_sequence) > 0) {
-            /** we have 'BandFecHeaderType' from a decoded red fec packet, use it to construct a fec block.
+            /** we have header from a decoded red fec packet, use it to construct a fec block.
              */
             group = fec_group.second;
             break;
@@ -155,14 +154,14 @@ FecDecoderSoftRtp::maybe_decode_rtp_packet(uint16_t rtp_sequence, const uint8_t*
 
 void
 FecDecoderSoftRtp::decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, const void* data, int len) {
-    /** construct a fec block and send it to the BandFecDecoder
+    /** construct a fec block and send it to the decoder
      */
     auto header   = fec_group->header_info;
     auto base_seq = fec_group->rtp_packet_sizes.begin()->first;
 
     assert(rtp_sequence >= base_seq);
     assert(rtp_sequence <= base_seq + header.n);
-    /** 'BandFecHeaderType::i' takes values from 0 to 'BandFecHeaderType::n' + 'BandFecHeaderType::k' - 1
+    /** 'i' takes values from 0 to 'n' + 'k' - 1
      */
     header.i = rtp_sequence - base_seq;
 
@@ -170,9 +169,9 @@ FecDecoderSoftRtp::decode_rtp(uint16_t rtp_sequence, const FecGroup* fec_group, 
     fec_block.insert(fec_block.end(), (char*)data, (char*)data + len);
 
     assert(len <= fec_group->header_info.s);
-    /** align(padding with 0) on 'BandFecHeaderType::s'
+    /** align(padding with 0) on 's'
      */
-    fec_block.resize(sizeof(BandFecHeaderType) + fec_group->header_info.s);
+    fec_block.resize(fec_group->header_info.header_size + fec_group->header_info.s);
 
     decode_fec_block(fec_group->sequence, &header, fec_block.data(), (int)fec_block.size(), false);
 }
@@ -184,7 +183,7 @@ FecDecoderSoftRtp::on_sequence_start(uint16_t sequence, const FecHeader* header,
     assert(0 == m_fec_groups.count(sequence));
     assert(kFecModeSoftRtp == fec_mode_from_value(header->mod));
     /** a new group should start with a red packet
-     *  which has a 'BandFecHeaderType::i' ranging from 'BandFecHeaderType::n' to 'BandFecHeaderType::n + BandFecHeaderType::k'
+     *  which has a 'i' ranging from 'n' to 'n + k'
      */
     assert(1 == header->red);
     assert(info->i >= info->n);

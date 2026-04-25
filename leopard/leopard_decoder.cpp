@@ -121,6 +121,8 @@ LeopardDecoder::parse(const void* buf, size_t size, FecHeaderInfo& info) {
     info.k = header.k;
     info.i = header.i;
 
+    info.header_size = sizeof(LeopardHeader);
+
     info.pack = [](const FecHeaderInfo& header_info) -> std::vector<uint8_t> {
         LeopardHeader be_header;
         /** convert 'LeopardHeader' from host byte order to network byte order

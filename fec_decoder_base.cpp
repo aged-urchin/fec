@@ -118,8 +118,6 @@ FecDecoderBase::set_stats_window_size(const int32_t wnd_ms) {
 
 void
 FecDecoderBase::decode(const uint8_t* data, int len) {
-    /** todo: refuse blocks of finished groups
-     */
     auto packet = FecPacket::parse_from_buffer(data, len);
     if (!packet) {
         std::cerr << "invalid fec packet" << std::endl;

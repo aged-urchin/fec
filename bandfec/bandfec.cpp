@@ -1,4 +1,5 @@
 #include "bandfec.h"
+#include "band_header.h"
 #include "../utils/utils.h"
 
 #include <algorithm>
@@ -67,13 +68,13 @@ create_bandfec_encoder(uint16_t     s,
      *  |-----------------------|
      *  |    redundant k - 1    |
      *  |-----------------------|
-     *  |   BandFecHeaderType   |
+     *  |     BandFecHeader     |
      *  |-----------------------|
      *  |           s           |
      *  .-----------------------.
      *
      */
-    auto f = (BandFecEnc*)malloc(sizeof(BandFecEnc) + sizeof(BandFecHeaderType) + s * (k + 1));
+    auto f = (BandFecEnc*)malloc(sizeof(BandFecEnc) + sizeof(BandFecHeader) + s * (k + 1));
     if (!f) {
         /** out of memory
          */
@@ -92,7 +93,7 @@ create_bandfec_encoder(uint16_t     s,
     f->e.g = g;
     f->e.i = 0;
 
-    auto h = (BandFecHeaderType*)(s * k + (char*) (f + 1));
+    auto h = (BandFecHeader*)(s * k + (char*) (f + 1));
 
     h->s = UINT16_TO_BE(s);
     h->n = UINT16_TO_BE(n);
@@ -129,7 +130,7 @@ add_to_redundant(int32_t* buf, BandFecEncDec* e, int i) {
 
 static void
 send_data(int32_t* buf, BandFecEnc* f, bool red) {
-    auto h = (BandFecHeaderType*)(f->e.k * f->e.s + (char*)(f + 1));
+    auto h = (BandFecHeader*)(f->e.k * f->e.s + (char*)(f + 1));
     int s = f->e.s + sizeof (*h);
 
     memcpy(h + 1, buf, f->e.s);
@@ -179,20 +180,8 @@ create_bandfec_decoder(fec_recv cb_recv, int64_t user_data1, int64_t user_data2)
 }
 
 void
-bandfec_parse_block(void* buf, BandFecHeaderType& header) {
-    auto h = (BandFecHeaderType*)buf;
-
-    header.s = UINT16_FROM_BE(h->s);
-    header.n = UINT16_FROM_BE(h->n);
-    header.k = UINT16_FROM_BE(h->k);
-    header.w = h->w;
-    header.g = h->g;
-    header.i = UINT32_FROM_BE(h->i);
-}
-
-void
 bandfec_decode(BandFecDec* f, void* buf) {
-    auto h = (BandFecHeaderType*)buf;
+    auto h = (BandFecHeader*)buf;
     int i, must_send = 0, hi = UINT32_FROM_BE(h->i);
 
     if (!f->e) {

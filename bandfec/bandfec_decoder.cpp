@@ -1,5 +1,6 @@
 #include "bandfec_decoder.h"
 #include "bandfec.h"
+#include "band_header.h"
 #include "../utils/utils.h"
 
 #include <cassert>
@@ -62,7 +63,7 @@ BandFecDecoder::on_block_decoded(uint16_t sequence_number, int32_t index, const 
 
 void
 BandFecDecoder::parse(const void* buf, size_t, FecHeaderInfo& info) {
-    BandFecHeaderType header;
+    BandFecHeader header;
     bandfec_parse_block((void*)buf, header);
 
     info.s = header.s;
@@ -70,8 +71,10 @@ BandFecDecoder::parse(const void* buf, size_t, FecHeaderInfo& info) {
     info.k = header.k;
     info.i = header.i;
 
+    info.header_size = sizeof(BandFecHeader);
+
     info.pack = [w=header.w, g=header.g](const FecHeaderInfo& header_info) {
-        BandFecHeaderType be_header;
+        BandFecHeader be_header;
         /** convert 'BandFecHeaderType' from host byte order to network byte order
          */
         be_header.s = UINT16_TO_BE((header_info.s));
