@@ -85,10 +85,11 @@ FecDecoderSoftRtp::decode(const uint8_t* data, int len) {
         std::cerr << "invalid rtp packet, ssrc does not match!" << std::endl;
         return;
     }
-
-    /** a fecgroup is unlikely to be larger than 65535
+    /** reject duplicate rtp packets
      */
-    assert(0 == m_rtp_packets.count(rtp_header.seq));
+    if (m_rtp_packets.count(rtp_header.seq) > 0) {
+        return;
+    }
     /** decode this packet if the first red packet of this group has arrived 
      */
     if (maybe_decode_rtp_packet(rtp_header.seq, data, len)) {

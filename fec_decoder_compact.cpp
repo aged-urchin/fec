@@ -90,6 +90,7 @@ FecDecoderCompact::clean_old_frames(uint16_t frame_number) {
                       << ", lifetime: " << now_ms - itr->second->creation_time << ", newest frame number is: " << frame_number
                       << ", total pending frames: " << m_pending_frames.size() << std::endl;
 
+            delete itr->second;
             itr = m_pending_frames.erase(itr);
         } else {
             ++itr;

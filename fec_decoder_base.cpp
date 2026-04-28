@@ -134,48 +134,57 @@ FecDecoderBase::decode(const uint8_t* data, int len) {
 
         std::cerr << "loss: " << stats.lossrate << ", effective lossrate: " << stats.effective_lossrate << std::endl;
         m_last_log_stats = now_ms;
-        return;
     }
     maybe_remove_outdated_decoders(now_ms, header->sequence_number);
 
     auto info = get_header_info((void*)packet->get_payload(), packet->get_payload_size());
+    do {
+        if (0 == m_seq_decoders.count(header->sequence_number)) {
+            auto itr = std::find_if(m_recent_stats.begin(), m_recent_stats.end(), [=](const auto& pair) {
+                return pair.second.sequence == header->sequence_number;
+            });
 
-    if (0 == m_seq_decoders.count(header->sequence_number)) {
-        auto itr = std::find_if(m_recent_stats.begin(), m_recent_stats.end(), [=](const auto& pair) {
-            return pair.second.sequence == header->sequence_number;
-        });
-
-        if (itr != m_recent_stats.end()) {
-            auto stats = itr->second;
-            /** late packets of an intact group
-             */
-            if (stats.expected_data_packets <= stats.received_data_packets + stats.recovered_packets) {
-                std::cerr << "sequence(" << header->sequence_number << ") was intact, refuse this packet" << std::endl;
-                return;
+            if (itr != m_recent_stats.end()) {
+                auto stats = itr->second;
+                /** late packets of an intact group
+                */
+                if (stats.expected_data_packets <= stats.received_data_packets + stats.recovered_packets) {
+                    std::cerr << "sequence(" << header->sequence_number << ") was intact, refuse this packet" << std::endl;
+                    break;
+                }
             }
+
+            auto decoder = new(std::nothrow) Decoder;
+            assert(decoder);
+
+            decoder->n              = info.n;
+            decoder->k              = info.k;
+            decoder->creation_time  = now_ms;
+            decoder->decoder        = create_decoder(header->sequence_number);
+
+            if (!decoder->decoder) {
+                std::cerr << "failed to create decoder for sequence(" << header->sequence_number << ")" << std::endl;
+                delete decoder;
+                break;
+            }
+
+            m_seq_decoders[header->sequence_number] = decoder;
+
+            if (NumberUnwrapper<uint16_t>::is_newer_value(header->sequence_number, m_latest_sequence_num)) {
+                auto prev_latest = m_latest_sequence_num;
+                m_latest_sequence_num = header->sequence_number;
+
+                decoder->missing_groups = ((((uint32_t)header->sequence_number + 65536) - prev_latest) % 65536);
+            } else {
+                std::cerr << "new sequence(" << header->sequence_number << ") is later than latest(" << m_latest_sequence_num << ")" << std::endl;
+            }
+
+            on_sequence_start(header->sequence_number, header, &info);
         }
 
-        auto decoder = new(std::nothrow) Decoder;
-        assert(decoder);
+        decode_fec_block(header->sequence_number, &info, packet->get_payload(), packet->get_payload_size(), header->red);
+    } while (false);
 
-        decoder->n              = info.n;
-        decoder->k              = info.k;
-        decoder->creation_time  = now_ms;
-        decoder->decoder        = create_decoder(header->sequence_number);
-
-        m_seq_decoders[header->sequence_number] = decoder;
-
-        if (NumberUnwrapper<uint16_t>::is_newer_value(header->sequence_number, m_latest_sequence_num)) {
-            m_latest_sequence_num = header->sequence_number;
-            decoder->missing_groups = ((((uint32_t)header->sequence_number + 65536) - m_latest_sequence_num) % 65536);
-        } else {
-            std::cerr << "new sequence(" << header->sequence_number << ") is later than latest(" << m_latest_sequence_num << ")" << std::endl;
-        }
-
-        on_sequence_start(header->sequence_number, header, &info);
-    }
-
-    decode_fec_block(header->sequence_number, &info, packet->get_payload(), packet->get_payload_size(), header->red);
     packet->release();
 }
 
@@ -237,11 +246,19 @@ FecDecoderBase::decode_fec_block(uint16_t sequence_number, const FecHeaderInfo* 
         assert((int32_t)info->i < decoder->n + decoder->k);
         assert((int32_t)decoder->red_packets.size() < decoder->k);
 
+        if (std::find(decoder->red_packets.begin(), decoder->red_packets.end(), info->i) != decoder->red_packets.end()) {
+            std::cerr << "ignore duplicated red block, sequence: " << sequence_number << ", index: " << info->i << std::endl;
+            return;
+        }
         decoder->red_packets.push_back(info->i);
     } else {
         assert((int32_t)info->i < decoder->n);
         assert((int32_t)decoder->data_packets.size() < decoder->n);
 
+        if (std::find(decoder->data_packets.begin(), decoder->data_packets.end(), info->i) != decoder->data_packets.end()) {
+            std::cerr << "ignore duplicated data block, sequence: " << sequence_number << ", index: " << info->i << std::endl;
+            return;
+        }
         decoder->data_packets.push_back(info->i);
     }
     /** sequential delivery is unnecessary(the decoder accepts out-of-order packets)
@@ -380,8 +397,13 @@ void
 FecDecoderBase::convert_stats(PacketLossStats* packet_stats, const Stats& stats) {
     assert(packet_stats);
 
-    packet_stats->lossrate           = (stats.expected_data_packets - stats.received_data_packets) * 1.f / stats.expected_data_packets;
-    packet_stats->effective_lossrate = (stats.expected_data_packets - stats.received_data_packets - stats.recovered_packets) * 1.f / stats.expected_data_packets;
+    if (stats.expected_data_packets <= 0) {
+        packet_stats->lossrate           = -1.f;
+        packet_stats->effective_lossrate = -1.f;
+    } else {
+        packet_stats->lossrate           = (stats.expected_data_packets - stats.received_data_packets) * 1.f / stats.expected_data_packets;
+        packet_stats->effective_lossrate = (stats.expected_data_packets - stats.received_data_packets - stats.recovered_packets) * 1.f / stats.expected_data_packets;
+    }
     packet_stats->missing_groups     = stats.missing_groups;
 
     assert(sizeof(stats.loss_distribution[0]) == sizeof(packet_stats->loss_dist[0]));

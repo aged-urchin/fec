@@ -78,7 +78,6 @@ create_bandfec_encoder(uint16_t     s,
     if (!f) {
         /** out of memory
          */
-        free(f);
         return nullptr;
     }
 
