@@ -42,8 +42,8 @@ FecEncoderSoftRtp::do_encode(const uint8_t* data, int data_len) {
             return;
         }
 
-        if (m_base_rtp_sequence_number + m_packets.size() != rtp_header.seq) {
-            std::cerr << "sequence number jumps from " << m_base_rtp_sequence_number << "to " << rtp_header.seq << std::endl;
+        if ((uint16_t)(m_base_rtp_sequence_number + (uint16_t)m_packets.size()) != rtp_header.seq) {
+            std::cerr << "sequence number jumps from " << m_base_rtp_sequence_number << " to " << rtp_header.seq << std::endl;
             do_flush();
         }
     }
@@ -73,7 +73,10 @@ FecEncoderSoftRtp::do_flush() {
 
     /** since we do not allow more encodes after flush, it is safe to modify the red params
      */
-    do_set_red_params((int)m_packets.size(), (int)(m_config.red_blocks * 1.0 / m_config.blocks * m_packets.size()));
+    auto red_blocks = (int)(m_config.red_blocks * 1.0 / m_config.blocks * m_packets.size());
+    red_blocks = (std::max)(1, red_blocks);
+
+    do_set_red_params((int)m_packets.size(), red_blocks);
 
     encode_group();
 }

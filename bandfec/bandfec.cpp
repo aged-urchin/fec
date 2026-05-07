@@ -352,8 +352,8 @@ flush_bandfec_decoder(BandFecDec* f) {
 
     /** work out the Galois field
      */
-    GFexp = (int*)malloc(sizeof(*GFexp) * (2i64 << f->e->g) - 2);
-    GFlog = (int*)malloc(sizeof(*GFlog) * (1i64 << f->e->g));
+    GFexp = (int*)malloc(sizeof(*GFexp) * (2LL << f->e->g) - 2);
+    GFlog = (int*)malloc(sizeof(*GFlog) * (1LL << f->e->g));
 
     for (i = 0, tmp = 1; i < (2 << f->e->g) - 2; i++) {
         GFexp[i] = tmp;
