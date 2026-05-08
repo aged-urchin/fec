@@ -3,6 +3,7 @@
 
 #include "fec_decoder_base.h"
 #include <vector>
+#include <set>
 
 class FecDecoderSoftRtp : public FecDecoderBase {
 public:
@@ -19,6 +20,7 @@ private:
         uint16_t                        sequence;
         FecHeaderInfo                   header_info;
         std::map<uint16_t, uint16_t>    rtp_packet_sizes;
+        std::set<uint16_t>              recoveried_packets;
 
         FecGroup(uint16_t sequence, const FecHeaderInfo* info, SoftRtp* ext);
         ~FecGroup();

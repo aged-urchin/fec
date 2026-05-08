@@ -262,6 +262,7 @@ FecDecoderBase::decode_fec_block(uint16_t sequence_number, const FecHeaderInfo* 
         decoder->data_packets.push_back(info->i);
     }
     /** sequential delivery is unnecessary(the decoder accepts out-of-order packets)
+     *  note: a delayed packet may arrive after it has been successfully recovered, the subclass shall decide whether to intercept the packet.
      */
     assert(decoder->decoder);
     decoder->decoder->decode((void*)data);

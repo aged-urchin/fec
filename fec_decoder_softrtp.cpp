@@ -149,6 +149,12 @@ FecDecoderSoftRtp::maybe_decode_rtp_packet(uint16_t rtp_sequence, const uint8_t*
         return false;
     }
 
+    if (group->recoveried_packets.count(rtp_sequence) > 0) {
+        /** a late packet that has been recovered
+         */
+        return true;
+    }
+
     decode_rtp(rtp_sequence, group, rtp_packet_data, rtp_packet_len);
     return true;
 }
@@ -189,7 +195,7 @@ FecDecoderSoftRtp::on_sequence_start(uint16_t sequence, const FecHeader* header,
     assert(1 == header->red);
     assert(info->i >= info->n);
     assert(info->i < (uint32_t)(info->n + info->k));
-    
+
     auto rtp_ext = (SoftRtp*)header->ext;
     m_fec_groups[sequence] = new(std::nothrow) FecGroup(sequence, info, rtp_ext);
 
@@ -241,6 +247,10 @@ FecDecoderSoftRtp::on_new_block(uint16_t sequence_number, int32_t pos, const uin
 
     assert(m_fec_groups[sequence_number]->rtp_packet_sizes.count(rtp_header.seq) != 0);
     assert(m_fec_groups[sequence_number]->rtp_packet_sizes[rtp_header.seq] <= len);
+
+    assert(0 == m_fec_groups[sequence_number]->recoveried_packets.count(rtp_header.seq));
+    m_fec_groups[sequence_number]->recoveried_packets.insert(rtp_header.seq);
+
     if (0 == m_fec_groups[sequence_number]->rtp_packet_sizes.count(rtp_header.seq) ||
         m_fec_groups[sequence_number]->rtp_packet_sizes[rtp_header.seq] > len) {
         std::cerr << "invalid rtp sequence number: " << rtp_header.seq << std::endl;
