@@ -17,6 +17,8 @@ public:
 
     bool set_red_params(int blocks_in_group, int red_blocks_in_group) override;
 
+    void set_max_reorder_depth(int packets) override;
+
     void encode(const uint8_t* data, int data_len) override;
 
     void flush() override;
@@ -29,6 +31,8 @@ protected:
     bool do_set_block_size(int size_in_bytes);
 
     bool do_set_red_params(int blocks_in_group, int red_blocks_in_group);
+
+    virtual void do_set_max_reorder_depth(int packets) {}
 
     virtual void do_encode(const uint8_t* data, int data_len) = 0;
 

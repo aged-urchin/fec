@@ -22,7 +22,22 @@ FecEncoderSoftRtp::set_red_params(int blocks_in_group, int red_blocks_in_group) 
 }
 
 void
+FecEncoderSoftRtp::do_set_max_reorder_depth(int packets) {
+    if (packets <= 0) {
+        std::cerr << "invalid arguments" << std::endl;
+        return;
+    }
+
+    m_max_reorder_depth = packets;
+}
+
+void
 FecEncoderSoftRtp::do_encode(const uint8_t* data, int data_len) {
+    if (data_len > kSoftRtpTwoByteSizeMax) {
+        std::cerr << "invalid packet size, could not handle packets of size larger than 32767" << std::endl;
+        return;
+    }
+
     RtpHeader rtp_header;
     if (!parse_rtp_buffer(data, data_len, rtp_header)) {
         std::cerr << "invalid rtp packet" << std::endl;
@@ -30,55 +45,86 @@ FecEncoderSoftRtp::do_encode(const uint8_t* data, int data_len) {
     }
 
     ///< std::cerr << "encode seq: " << rtp_header.seq << ", len: " << data_len << std::endl;
-    if (!m_packets.empty()) {
-        if (m_ssrc != rtp_header.ssrc) {
-            std::cerr << "ssrc differs, was: " << m_ssrc << ", new: " << rtp_header.ssrc << std::endl;
-            return;
-        }
-
-        if (data_len > kSoftRtpTwoByteSizeMax) {
-            std::cerr << "invalid packet size, 'kFecExtRtp' is designed to hold packets of size smaller than 32767" << std::endl;
-            do_flush();
-            return;
-        }
-
-        if ((uint16_t)(m_base_rtp_sequence_number + (uint16_t)m_packets.size()) != rtp_header.seq) {
-            std::cerr << "sequence number jumps from " << m_base_rtp_sequence_number << " to " << rtp_header.seq << std::endl;
-            do_flush();
-        }
+    if (m_ssrc >= 0 && m_ssrc != rtp_header.ssrc) {
+        std::cerr << "ssrc differs, was: " << m_ssrc << ", new: " << rtp_header.ssrc << std::endl;
+        return;
     }
 
-    if (m_packets.empty()) {
-        m_base_rtp_sequence_number = rtp_header.seq;
-        m_ssrc                     = rtp_header.ssrc;
+    if (m_ssrc < 0) {
+        std::cerr << "setting ssrc to " << rtp_header.ssrc << std::endl;
+        m_ssrc = rtp_header.ssrc;
     }
 
-    m_packets.push_back({ data, data + data_len });
-    if (m_max_packet_len < data_len) {
-        m_max_packet_len = data_len;
+    /** all sequence-based reorder bookkeeping is done in unwrapped 64-bit space so a 16-bit RTP wrap-around does not break ordering decisions.
+     */
+    auto unwrapped_seq = m_seq_unwrapper.unwrap(rtp_header.seq);
+    /** this packet is older than the earliest sequence we are still willing to feed into FEC.
+     *  (e.g. it has either already been encoded or was abandoned after reorder overflow)
+     */
+    if (m_min_acceptable_rtp_sequence >= 0 && unwrapped_seq < m_min_acceptable_rtp_sequence) {
+        std::cerr << "drop a late rtp packet(seq: " << rtp_header.seq << "), acceptable: " << m_min_acceptable_rtp_sequence << std::endl;
+        return;
     }
 
-    assert(!m_encoder);
-    if ((int)m_packets.size() == m_config.blocks) {
-        encode_group();
+    /** ignore duplicates while the packet is still parked in the reorder buffer.
+     */
+    if (m_seen_rtp_sequences.count(unwrapped_seq) > 0) {
+        return;
+    }
+
+    /** cache the newly arrived packet first,
+     *  only consecutive packets starting from m_expected_rtp_sequence can be drained into the current FEC group.
+     */
+    m_seen_rtp_sequences.insert(unwrapped_seq);
+    m_pending_packets[unwrapped_seq] = { data, data + data_len };
+
+    if (m_latest_rtp_sequence < unwrapped_seq) {
+        m_latest_rtp_sequence = unwrapped_seq;
+    }
+
+    if (m_expected_rtp_sequence < 0 && !m_pending_packets.empty()) {
+        m_expected_rtp_sequence = m_pending_packets.begin()->first;
+    }
+
+    /** try to move as many now-consecutive packets as possible from the reorder buffer into the current FEC group.
+     */
+    drain_pending_packets();
+
+    /** we still have a hole at m_expected_rtp_sequence, but packets far enough
+     *  ahead have already arrived. Give up waiting for that missing range and restart from the earliest pending packet.
+     */
+    std::ostringstream os;
+    while (is_reorder_window_full()) {
+        if (os.str().empty()) {
+            for (auto& packet : m_pending_packets) {
+                os << packet.first << " ";
+            }
+        }
+        handle_reorder_window_full();
+    }
+
+    if (!os.str().empty()) {
+        os << " ===> ";
+        for (auto& packet : m_pending_packets) {
+            os << packet.first << " ";
+        }
+        std::cerr << "reorder windows exceeded: " << os.str() << std::endl;
     }
 }
 
 void
 FecEncoderSoftRtp::do_flush() {
-    std::cerr << "flush current group with packets: " << m_packets.size() << std::endl;
-    if (0 == m_max_packet_len || m_packets.empty()) {
-        return;
-    }
-
-    /** since we do not allow more encodes after flush, it is safe to modify the red params
+    /** stream-ending flush does not wait for missing packets any more: drain each remaining pending run starting from its earliest available packet.
      */
-    auto red_blocks = (int)(m_config.red_blocks * 1.0 / m_config.blocks * m_packets.size());
-    red_blocks = (std::max)(1, red_blocks);
+    do {
+        flush_ordered_group();
+        if (m_pending_packets.empty()) {
+            break;
+        }
 
-    do_set_red_params((int)m_packets.size(), red_blocks);
-
-    encode_group();
+        m_expected_rtp_sequence = m_pending_packets.begin()->first;
+        drain_pending_packets();
+    } while (true);
 }
 
 void
@@ -126,12 +172,112 @@ FecEncoderSoftRtp::encode_group() {
     reset();
 }
 
+bool
+FecEncoderSoftRtp::append_packet_to_group(const uint8_t* data, int data_len, uint16_t rtp_seq) {
+    /** the first packet appended after a flush becomes the base RTP sequence advertised in the red packet headers for this FEC group.
+     */
+    if (m_packets.empty()) {
+        m_base_rtp_sequence_number = rtp_seq;
+    }
+
+    m_packets.push_back({ data, data + data_len });
+    if (m_max_packet_len < data_len) {
+        m_max_packet_len = data_len;
+    }
+
+    assert(!m_encoder);
+    if ((int)m_packets.size() == m_config.blocks) {
+        encode_group();
+        return true;
+    }
+
+    return false;
+}
+
+void
+FecEncoderSoftRtp::flush_ordered_group() {
+    std::cerr << "flush current group with packets: " << m_packets.size() << std::endl;
+    if (0 == m_max_packet_len || m_packets.empty()) {
+        return;
+    }
+
+    /** emit a shortened group with a proportionally reduced redundancy count.
+     *  the original configured group size is restored right after encoding so future full groups still use the requested protection level.
+     */
+    auto red_blocks = (int)(m_config.red_blocks * 1.0 / m_config.blocks * m_packets.size());
+    red_blocks = (std::max)(1, red_blocks);
+
+    auto blocks_in_group     = m_config.blocks;
+    auto red_blocks_in_group = m_config.red_blocks;
+    do_set_red_params((int)m_packets.size(), red_blocks);
+
+    encode_group();
+    /** restore the original params
+     */
+    do_set_red_params(blocks_in_group, red_blocks_in_group);
+}
+
+void
+FecEncoderSoftRtp::drain_pending_packets() {
+    /** consume a consecutive run [expected, expected + n) from the reorder buffer.
+     *  the moment we hit a gap, draining stops and the missing sequence keeps blocking later packets until either it arrives or the reorder window overflows.
+     */
+    while (!m_pending_packets.empty() && m_expected_rtp_sequence >= 0) {
+        auto itr = m_pending_packets.find(m_expected_rtp_sequence);
+        if (itr == m_pending_packets.end()) {
+            break;
+        }
+
+        auto packet  = std::move(itr->second);
+        auto rtp_seq = (uint16_t)m_expected_rtp_sequence;
+
+        m_pending_packets.erase(itr);
+        m_seen_rtp_sequences.erase(m_expected_rtp_sequence);
+
+        /** anything older than the next expected sequence is no longer useful to the encoder.
+         */
+        m_min_acceptable_rtp_sequence = ++m_expected_rtp_sequence;
+
+        auto group_encoded = append_packet_to_group(packet.data(), (int)packet.size(), rtp_seq);
+        if (group_encoded) {
+            /** group boundaries do not reset m_expected_rtp_sequence.
+             *  we still wait for the earliest missing packet in the overall input stream so a slightly late packet can join the next FEC group.
+             */
+            if (!m_pending_packets.empty()) {
+                m_latest_rtp_sequence = m_pending_packets.rbegin()->first;
+            } else {
+                m_latest_rtp_sequence = -1;
+            }
+        }
+    }
+}
+
+bool
+FecEncoderSoftRtp::is_reorder_window_full() {
+    return !m_pending_packets.empty() && m_expected_rtp_sequence >= 0 && m_latest_rtp_sequence - m_expected_rtp_sequence >= m_max_reorder_depth;;
+}
+
+void
+FecEncoderSoftRtp::handle_reorder_window_full() {
+    assert(!m_pending_packets.empty());
+    std::cerr << "reorder window exceeded, flush current ordered group, expected: "
+                << m_expected_rtp_sequence << ", latest: " << m_latest_rtp_sequence << std::endl;
+
+    flush_ordered_group();
+
+    /** at this point we explicitly abandon the missing range before the earliest pending packet and restart the protected run from there.
+     */
+    m_expected_rtp_sequence = m_pending_packets.begin()->first;
+    m_latest_rtp_sequence   = m_pending_packets.rbegin()->first;
+
+    drain_pending_packets();
+}
+
 void
 FecEncoderSoftRtp::reset() {
     destroy_encoder();
 
     m_base_rtp_sequence_number = 0;
-    m_ssrc                     = 0;
     m_max_packet_len           = 0;
 
     m_packets.clear();

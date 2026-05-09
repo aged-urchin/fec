@@ -31,6 +31,12 @@ FecEncoderBase::set_red_params(int blocks_in_group, int red_blocks_in_group) {
 }
 
 void
+FecEncoderBase::set_max_reorder_depth(int packets) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    do_set_max_reorder_depth(packets);
+}
+
+void
 FecEncoderBase::encode(const uint8_t* data, int data_len) {
     std::lock_guard<std::mutex> lock(m_mutex);
 

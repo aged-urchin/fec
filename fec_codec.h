@@ -245,6 +245,10 @@ public:
     /** set group size(number data blocks and number redundant blocks)
      */
     virtual bool set_red_params(int blocks_in_group, int red_blocks_in_group) = 0;
+    /** set the maximum number of out-of-order RTP packets that encoding will wait through before abandoning the missing range and
+     *  restarting from the earliest pending packet. (default is 8, only meaningful for 'kFecModeSoftRtp')
+     */
+    virtual void set_max_reorder_depth(int packets) = 0;
     /** encode one frame (e.g. one udp/rtp packet)
      */
     virtual void encode(const uint8_t* data, int data_len) = 0;
